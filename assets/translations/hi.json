@@ -1,0 +1,140 @@
+{
+  "app_name": "सस्टेन",
+  "tagline": "स्मार्ट खेती, बेहतर फसल",
+
+  "login": {
+    "title": "वापस स्वागत है",
+    "subtitle": "जारी रखने के लिए अपने फ़ोन नंबर से लॉगिन करें",
+    "phone_label": "फ़ोन नंबर",
+    "phone_hint": "10 अंकों का फ़ोन नंबर दर्ज करें",
+    "send_otp": "OTP भेजें",
+    "verify_otp": "OTP सत्यापित करें",
+    "verify_subtitle": "{phone} पर भेजा गया 6 अंकों का कोड दर्ज करें",
+    "resend_otp": "OTP दोबारा भेजें",
+    "change_number": "नंबर बदलें",
+    "verify_login": "सत्यापित करें और लॉगिन करें",
+    "new_to_sustainn": "सस्टेन पर नए हैं?",
+    "create_account": "खाता बनाएं",
+    "invalid_phone": "कृपया एक मान्य 10 अंकों का फ़ोन नंबर दर्ज करें",
+    "invalid_otp": "कृपया 6 अंकों का OTP दर्ज करें",
+    "otp_error": "अमान्य OTP। कृपया पुन: प्रयास करें।"
+  },
+
+  "signup": {
+    "title": "खाता बनाएं",
+    "subtitle": "सस्टेन से जुड़ें और अपनी खेती को स्मार्ट बनाएं",
+    "full_name": "पूरा नाम",
+    "full_name_hint": "अपना पूरा नाम दर्ज करें",
+    "phone_number": "फ़ोन नंबर",
+    "region": "क्षेत्र / गांव",
+    "region_hint": "जैसे, पुणे, महाराष्ट्र",
+    "language": "पसंदीदा भाषा",
+    "submit": "खाता बनाएं",
+    "already_have_account": "पहले से खाता है?",
+    "login": "लॉगिन",
+    "success": "खाता सफलतापूर्वक बनाया गया! कृपया लॉगिन करें।"
+  },
+
+  "dashboard": {
+    "greeting_morning": "सुप्रभात 🌅",
+    "greeting_afternoon": "नमस्ते ☀️",
+    "greeting_evening": "शुभ संध्या 🌙",
+    "farm_overview": "खेत का अवलोकन",
+    "total_fields": "कुल खेत",
+    "active_crops": "सक्रिय फसलें",
+    "action_points": "कार्य बिंदु",
+    "weather": "मौसम",
+    "my_fields": "मेरे खेत",
+    "add_field": "खेत जोड़ें",
+    "view_details": "विवरण देखें",
+    "urgent": "{count} अत्यावश्यक"
+  },
+
+  "field": {
+    "add_title": "नया खेत जोड़ें",
+    "add_info": "फसलों और गतिविधियों की ट्रैकिंग शुरू करने के लिए अपने खेत का विवरण जोड़ें।",
+    "field_name": "खेत का नाम",
+    "field_name_hint": "जैसे, उत्तरी खेत, नदी किनारे का प्लॉट",
+    "field_area": "खेत का क्षेत्रफल",
+    "gps_location": "GPS स्थान",
+    "detect_location": "स्थान पता लगाने के लिए टैप करें",
+    "location_detected": "स्थान मिल गया",
+    "soil_type": "मिट्टी का प्रकार",
+    "save_field": "खेत सेव करें",
+    "field_added": "खेत सफलतापूर्वक जोड़ा गया! 🌾",
+    "crops": "फसलें",
+    "add_crop": "फसल जोड़ें",
+    "no_crops": "अभी कोई फसल नहीं",
+    "no_crops_subtitle": "ट्रैकिंग शुरू करने के लिए अपनी पहली फसल जोड़ें"
+  },
+
+  "crop": {
+    "add_title": "फसल जोड़ें",
+    "crop_name": "फसल का नाम",
+    "select_crop": "फसल चुनें",
+    "search_crops": "फसलें खोजें...",
+    "variety": "किस्म / हाइब्रिड",
+    "variety_hint": "जैसे, बासमती 1121, बीटी कपास",
+    "sowing_date": "बुवाई की तारीख",
+    "harvest_date": "अपेक्षित कटाई की तारीख (वैकल्पिक)",
+    "add_crop": "फसल जोड़ें",
+    "crop_added": "फसल सफलतापूर्वक जोड़ी गई! 🌱",
+    "health_summary": "स्वास्थ्य सारांश",
+    "financial_overview": "वित्तीय अवलोकन",
+    "activities": "गतिविधियां",
+    "log_activity": "गतिविधि दर्ज करें",
+    "no_activities": "अभी तक कोई गतिविधि दर्ज नहीं",
+    "input_cost": "लागत",
+    "expected_revenue": "अपेक्षित आय",
+    "expected_profit": "अपेक्षित लाभ"
+  },
+
+  "activity": {
+    "title": "गतिविधि दर्ज करें",
+    "type": "गतिविधि का प्रकार",
+    "date": "तारीख",
+    "notes": "नोट्स",
+    "notes_hint": "गतिविधि का वर्णन करें...",
+    "voice_input": "आवाज़ इनपुट",
+    "cost": "लागत (₹)",
+    "quantity": "मात्रा",
+    "unit": "इकाई",
+    "save": "गतिविधि दर्ज करें",
+    "success": "{emoji} {label} सफलतापूर्वक दर्ज!",
+    "voice_coming": "आवाज़ इनपुट चरण 2 में आ रहा है 🎤"
+  },
+
+  "action_points": {
+    "title": "कार्य बिंदु",
+    "resolved": "कार्य बिंदु हल हो गया ✓",
+    "overdue": "{days} दिन देरी",
+    "due_today": "आज देय",
+    "due_tomorrow": "कल देय",
+    "due_in": "{days} दिन में देय"
+  },
+
+  "health": {
+    "good": "स्वस्थ",
+    "moderate": "मध्यम",
+    "poor": "ध्यान चाहिए",
+    "good_label": "स्वस्थ विकास 🌿",
+    "moderate_label": "ध्यान चाहिए ⚠️",
+    "poor_label": "खतरे में 🚨",
+    "good_desc": "फसल अच्छी तरह बढ़ रही है। मौजूदा प्रथाएं जारी रखें।",
+    "moderate_desc": "कुछ समस्याएं पाई गईं। नीचे कार्य बिंदु देखें।",
+    "poor_desc": "तत्काल ध्यान आवश्यक। सिफारिशें देखें।"
+  },
+
+  "common": {
+    "save": "सेव",
+    "cancel": "रद्द",
+    "delete": "हटाएं",
+    "edit": "संपादन",
+    "loading": "लोड हो रहा है...",
+    "error": "कुछ गलत हो गया",
+    "retry": "पुन: प्रयास",
+    "acres": "एकड़",
+    "days_old": "दिन पुराना",
+    "status": "स्थिति"
+  }
+}

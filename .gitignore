@@ -1,0 +1,32 @@
+# Flutter/Dart
+.dart_tool/
+.packages
+build/
+*.g.dart
+
+# Android
+android/.gradle/
+android/app/debug
+android/app/profile
+android/app/release
+**/android/**/GeneratedPluginRegistrant.java
+
+# iOS
+ios/Flutter/.last_build_id
+ios/Pods/
+ios/.symlinks/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# macOS
+*.DS_Store
+
+# Windows
+Thumbs.db
+
+# Misc
+.env
+*.log

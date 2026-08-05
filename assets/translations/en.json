@@ -1,0 +1,140 @@
+{
+  "app_name": "Sustainn",
+  "tagline": "Smart Farming, Better Harvests",
+
+  "login": {
+    "title": "Welcome back",
+    "subtitle": "Login with your phone number to continue",
+    "phone_label": "Phone Number",
+    "phone_hint": "Enter 10-digit phone number",
+    "send_otp": "Send OTP",
+    "verify_otp": "Verify OTP",
+    "verify_subtitle": "Enter the 6-digit code sent to {phone}",
+    "resend_otp": "Resend OTP",
+    "change_number": "Change Number",
+    "verify_login": "Verify & Login",
+    "new_to_sustainn": "New to Sustainn?",
+    "create_account": "Create Account",
+    "invalid_phone": "Please enter a valid 10-digit phone number",
+    "invalid_otp": "Please enter the 6-digit OTP",
+    "otp_error": "Invalid OTP. Please try again."
+  },
+
+  "signup": {
+    "title": "Create Account",
+    "subtitle": "Join Sustainn and start managing your farm smarter",
+    "full_name": "Full Name",
+    "full_name_hint": "Enter your full name",
+    "phone_number": "Phone Number",
+    "region": "Region / Village",
+    "region_hint": "e.g., Pune, Maharashtra",
+    "language": "Preferred Language",
+    "submit": "Create Account",
+    "already_have_account": "Already have an account?",
+    "login": "Login",
+    "success": "Account created successfully! Please login."
+  },
+
+  "dashboard": {
+    "greeting_morning": "Good Morning 🌅",
+    "greeting_afternoon": "Good Afternoon ☀️",
+    "greeting_evening": "Good Evening 🌙",
+    "farm_overview": "Farm Overview",
+    "total_fields": "Total Fields",
+    "active_crops": "Active Crops",
+    "action_points": "Action Points",
+    "weather": "Weather",
+    "my_fields": "My Fields",
+    "add_field": "Add Field",
+    "view_details": "View Details",
+    "urgent": "{count} urgent"
+  },
+
+  "field": {
+    "add_title": "Add New Field",
+    "add_info": "Add your field details to start tracking crops and activities.",
+    "field_name": "Field Name",
+    "field_name_hint": "e.g., North Field, Riverside Plot",
+    "field_area": "Field Area",
+    "gps_location": "GPS Location",
+    "detect_location": "Tap to detect location",
+    "location_detected": "Location Detected",
+    "soil_type": "Soil Type",
+    "save_field": "Save Field",
+    "field_added": "Field added successfully! 🌾",
+    "crops": "Crops",
+    "add_crop": "Add Crop",
+    "no_crops": "No crops yet",
+    "no_crops_subtitle": "Add your first crop to start tracking"
+  },
+
+  "crop": {
+    "add_title": "Add Crop",
+    "crop_name": "Crop Name",
+    "select_crop": "Select a crop",
+    "search_crops": "Search crops...",
+    "variety": "Variety / Hybrid",
+    "variety_hint": "e.g., Basmati 1121, Bt Cotton",
+    "sowing_date": "Sowing Date",
+    "harvest_date": "Expected Harvest Date (Optional)",
+    "add_crop": "Add Crop",
+    "crop_added": "Crop added successfully! 🌱",
+    "health_summary": "Health Summary",
+    "financial_overview": "Financial Overview",
+    "activities": "Activities",
+    "log_activity": "Log Activity",
+    "no_activities": "No activities logged yet",
+    "input_cost": "Input Cost",
+    "expected_revenue": "Expected Revenue",
+    "expected_profit": "Expected Profit"
+  },
+
+  "activity": {
+    "title": "Log Activity",
+    "type": "Activity Type",
+    "date": "Date",
+    "notes": "Notes",
+    "notes_hint": "Describe the activity...",
+    "voice_input": "Voice input",
+    "cost": "Cost (₹)",
+    "quantity": "Quantity",
+    "unit": "Unit",
+    "save": "Log Activity",
+    "success": "{emoji} {label} logged successfully!",
+    "voice_coming": "Voice input coming in Phase 2 🎤"
+  },
+
+  "action_points": {
+    "title": "Action Points",
+    "resolved": "Action point resolved ✓",
+    "overdue": "{days}d overdue",
+    "due_today": "Due today",
+    "due_tomorrow": "Due tomorrow",
+    "due_in": "Due in {days}d"
+  },
+
+  "health": {
+    "good": "Healthy",
+    "moderate": "Moderate",
+    "poor": "Needs Attention",
+    "good_label": "Healthy Growth 🌿",
+    "moderate_label": "Needs Attention ⚠️",
+    "poor_label": "At Risk 🚨",
+    "good_desc": "Crop is growing well. Continue current practices.",
+    "moderate_desc": "Some issues detected. Review action points below.",
+    "poor_desc": "Immediate attention needed. Check recommendations."
+  },
+
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "retry": "Retry",
+    "acres": "Acres",
+    "days_old": "Days Old",
+    "status": "Status"
+  }
+}
