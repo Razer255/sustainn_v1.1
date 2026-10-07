@@ -107,122 +107,24 @@ const FinancialSchema = new mongoose.Schema({
 });
 const Financial = mongoose.model('Financial', FinancialSchema);
 
-// ─── Location (LGD) proxy ───────────────────────────────────
-// Proxies India's Local Government Directory (data.gov.in) so the Signup
-// screen's State → District → Tehsil → Village cascade never ships the
-// API key inside the Flutter client bundle.
+// ─── Location (States / Districts) ───────────────────────────
+// Served from a bundled static dataset instead of proxying data.gov.in's
+// LGD API, which has proven unreliable (sustained outages / unreachable
+// from multiple networks). Tehsil and Village are free-text fields on the
+// client, since no comparable open dataset exists at that granularity.
 
-const LGD_BASE = 'https://api.data.gov.in/resource';
-const LGD_RESOURCES = {
-  states: 'a71e60f0-a21d-43de-a6c5-fa5d21600cdb',
-  districts: '37231365-78ba-44d5-ac22-3deec40b9197',
-  subdistricts: '6be51a29-876a-403a-a6da-42fde795e751',
-  villages: 'c967fe8f-69c4-42df-8afc-8a2c98057437',
-};
+const statesData = require('./data/states-districts.json');
 
-// In-memory cache: level -> Map(parentCode -> [{code, name}])
-// ('' as parentCode for the unfiltered States list). Cleared on restart.
-const lgdCache = {
-  states: new Map(),
-  districts: new Map(),
-  subdistricts: new Map(),
-  villages: new Map(),
-};
-
-/**
- * Fetch and cache one LGD level, optionally filtered by a parent code.
- * @param {'states'|'districts'|'subdistricts'|'villages'} level
- * @param {{filterField?: string, filterValue?: string|number, codeField: string, nameField: string}} opts
- */
-async function fetchLgdLevel(level, opts) {
-  const cacheKey = opts.filterValue != null ? String(opts.filterValue) : '';
-  const cache = lgdCache[level];
-  if (cache.has(cacheKey)) return cache.get(cacheKey);
-
-  const params = new URLSearchParams({
-    'api-key': process.env.LGD_API_KEY,
-    format: 'json',
-    limit: '1000',
-  });
-  if (opts.filterField && opts.filterValue != null) {
-    params.set(`filters[${opts.filterField}]`, String(opts.filterValue));
-  }
-
-  const url = `${LGD_BASE}/${LGD_RESOURCES[level]}?${params.toString()}`;
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`LGD upstream error (${level}): ${response.status}`);
-  }
-  const data = await response.json();
-  const records = data.records || [];
-
-  const options = records
-    .map((r) => ({ code: r[opts.codeField], name: r[opts.nameField] }))
-    .filter((o) => o.code != null && o.name)
-    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
-
-  cache.set(cacheKey, options);
-  return options;
-}
-
-app.get('/api/location/states', async (req, res) => {
-  try {
-    const options = await fetchLgdLevel('states', {
-      codeField: 'state_code',
-      nameField: 'state_name_english',
-    });
-    res.json(options);
-  } catch (err) {
-    res.status(502).json({ error: err.message });
-  }
+app.get('/api/location/states', (req, res) => {
+  res.json(statesData.map((s) => ({ code: s.code, name: s.name })));
 });
 
-app.get('/api/location/districts', async (req, res) => {
-  try {
-    const { stateCode } = req.query;
-    if (!stateCode) return res.status(400).json({ error: 'stateCode is required' });
-    const options = await fetchLgdLevel('districts', {
-      filterField: 'state_code',
-      filterValue: stateCode,
-      codeField: 'district_code',
-      nameField: 'district_name_english',
-    });
-    res.json(options);
-  } catch (err) {
-    res.status(502).json({ error: err.message });
-  }
-});
-
-app.get('/api/location/subdistricts', async (req, res) => {
-  try {
-    const { districtCode } = req.query;
-    if (!districtCode) return res.status(400).json({ error: 'districtCode is required' });
-    const options = await fetchLgdLevel('subdistricts', {
-      filterField: 'district_code',
-      filterValue: districtCode,
-      codeField: 'subdistrict_code',
-      nameField: 'subdistrict_name_english',
-    });
-    res.json(options);
-  } catch (err) {
-    res.status(502).json({ error: err.message });
-  }
-});
-
-app.get('/api/location/villages', async (req, res) => {
-  try {
-    const { subdistrictCode } = req.query;
-    if (!subdistrictCode) return res.status(400).json({ error: 'subdistrictCode is required' });
-    const options = await fetchLgdLevel('villages', {
-      filterField: 'subdistrictCode', // camelCase on this resource, unlike the other three
-      filterValue: subdistrictCode,
-      codeField: 'villageCode',
-      nameField: 'villageNameEnglish',
-    });
-    res.json(options);
-  } catch (err) {
-    res.status(502).json({ error: err.message });
-  }
+app.get('/api/location/districts', (req, res) => {
+  const { stateCode } = req.query;
+  if (!stateCode) return res.status(400).json({ error: 'stateCode is required' });
+  const state = statesData.find((s) => String(s.code) === String(stateCode));
+  if (!state) return res.json([]);
+  res.json(state.districts);
 });
 
 // ─── Admin Routes ─────────────────────────────────────────────

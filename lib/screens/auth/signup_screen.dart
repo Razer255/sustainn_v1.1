@@ -25,22 +25,19 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _obscurePassword = true;
 
   final _apiService = ApiService();
+  final _tehsilController = TextEditingController();
+  final _villageController = TextEditingController();
 
-  // State → District → Tehsil → Village cascade.
+  // State → District dropdowns; Tehsil/Village are free text (see
+  // _tehsilController / _villageController above).
   LocationOption? _selectedState;
   LocationOption? _selectedDistrict;
-  LocationOption? _selectedTehsil;
-  LocationOption? _selectedVillage;
 
   List<LocationOption> _states = [];
   List<LocationOption> _districts = [];
-  List<LocationOption> _tehsils = [];
-  List<LocationOption> _villages = [];
 
   bool _statesLoading = false;
   bool _districtsLoading = false;
-  bool _tehsilsLoading = false;
-  bool _villagesLoading = false;
   bool _statesError = false;
 
   @override
@@ -55,6 +52,8 @@ class _SignupScreenState extends State<SignupScreen> {
     _nameController.dispose();
     _guardianNameController.dispose();
     _passwordController.dispose();
+    _tehsilController.dispose();
+    _villageController.dispose();
     super.dispose();
   }
 
@@ -76,11 +75,7 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() {
       _selectedState = state;
       _selectedDistrict = null;
-      _selectedTehsil = null;
-      _selectedVillage = null;
       _districts = [];
-      _tehsils = [];
-      _villages = [];
       _districtsLoading = true;
     });
     final districts = await _apiService.getDistricts(state.code);
@@ -91,40 +86,8 @@ class _SignupScreenState extends State<SignupScreen> {
     });
   }
 
-  Future<void> _onDistrictSelected(LocationOption district) async {
-    setState(() {
-      _selectedDistrict = district;
-      _selectedTehsil = null;
-      _selectedVillage = null;
-      _tehsils = [];
-      _villages = [];
-      _tehsilsLoading = true;
-    });
-    final tehsils = await _apiService.getSubdistricts(district.code);
-    if (!mounted) return;
-    setState(() {
-      _tehsils = tehsils;
-      _tehsilsLoading = false;
-    });
-  }
-
-  Future<void> _onTehsilSelected(LocationOption tehsil) async {
-    setState(() {
-      _selectedTehsil = tehsil;
-      _selectedVillage = null;
-      _villages = [];
-      _villagesLoading = true;
-    });
-    final villages = await _apiService.getVillages(tehsil.code);
-    if (!mounted) return;
-    setState(() {
-      _villages = villages;
-      _villagesLoading = false;
-    });
-  }
-
-  void _onVillageSelected(LocationOption village) {
-    setState(() => _selectedVillage = village);
+  void _onDistrictSelected(LocationOption district) {
+    setState(() => _selectedDistrict = district);
   }
 
   @override
@@ -294,27 +257,37 @@ class _SignupScreenState extends State<SignupScreen> {
                       const SizedBox(height: 20),
                       _buildLabel('Tehsil'),
                       const SizedBox(height: 8),
-                      _buildCascadeDropdown(
-                        hint: 'Select tehsil',
-                        value: _selectedTehsil,
-                        options: _tehsils,
-                        isLoading: _tehsilsLoading,
-                        onSelected: _onTehsilSelected,
-                        errorValidatorMessage: 'Please select your tehsil',
+                      TextFormField(
+                        controller: _tehsilController,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          hintText: 'Enter your tehsil',
+                          prefixIcon: Icon(Icons.location_on_outlined),
+                        ),
+                        validator: (val) {
+                          if (val == null || val.trim().isEmpty) {
+                            return 'Please enter your tehsil';
+                          }
+                          return null;
+                        },
                       ),
-                    ],
 
-                    if (_selectedTehsil != null) ...[
                       const SizedBox(height: 20),
                       _buildLabel('Village'),
                       const SizedBox(height: 8),
-                      _buildCascadeDropdown(
-                        hint: 'Select village',
-                        value: _selectedVillage,
-                        options: _villages,
-                        isLoading: _villagesLoading,
-                        onSelected: _onVillageSelected,
-                        errorValidatorMessage: 'Please select your village',
+                      TextFormField(
+                        controller: _villageController,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          hintText: 'Enter your village',
+                          prefixIcon: Icon(Icons.location_on_outlined),
+                        ),
+                        validator: (val) {
+                          if (val == null || val.trim().isEmpty) {
+                            return 'Please enter your village';
+                          }
+                          return null;
+                        },
                       ),
                     ],
 
@@ -546,8 +519,8 @@ class _SignupScreenState extends State<SignupScreen> {
       final userId = DateTime.now().millisecondsSinceEpoch.toString();
 
       final region = [
-        _selectedVillage!.name,
-        _selectedTehsil!.name,
+        _villageController.text.trim(),
+        _tehsilController.text.trim(),
         _selectedDistrict!.name,
         _selectedState!.name,
       ].join(', ');

@@ -289,16 +289,6 @@ class ApiService {
     return _getLocationOptions('$_baseUrl/location/districts?stateCode=$stateCode');
   }
 
-  Future<List<LocationOption>> getSubdistricts(int districtCode) async {
-    debugPrint('[ApiService] getSubdistricts($districtCode)');
-    return _getLocationOptions('$_baseUrl/location/subdistricts?districtCode=$districtCode');
-  }
-
-  Future<List<LocationOption>> getVillages(int subdistrictCode) async {
-    debugPrint('[ApiService] getVillages($subdistrictCode)');
-    return _getLocationOptions('$_baseUrl/location/villages?subdistrictCode=$subdistrictCode');
-  }
-
   Future<List<LocationOption>> _getLocationOptions(String url) async {
     try {
       final response = await http
