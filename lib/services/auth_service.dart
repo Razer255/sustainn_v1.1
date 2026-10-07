@@ -1,86 +1,120 @@
 import 'package:flutter/foundation.dart';
+import 'api_service.dart';
+import 'mock_data.dart';
+import '../models/user_model.dart';
+import '../models/field_model.dart';
+import '../models/crop_model.dart';
+import '../models/activity_model.dart';
+import '../models/action_point_model.dart';
+import '../models/financial_model.dart';
 
-/// Authentication service wrapping Firebase Auth.
-/// Currently uses mock authentication for development.
-/// Replace with Firebase Auth phone OTP once google-services.json is configured.
 class AuthService extends ChangeNotifier {
+  final ApiService _apiService = ApiService();
+
   bool _isAuthenticated = false;
   bool _isLoading = false;
+  bool _userProfileExists = false; 
   String? _userId;
   String? _phoneNumber;
-  String? _verificationId;
 
   bool get isAuthenticated => _isAuthenticated;
   bool get isLoading => _isLoading;
+  bool get userProfileExists => _userProfileExists;
   String? get userId => _userId;
   String? get phoneNumber => _phoneNumber;
 
-  /// Send OTP to the given phone number.
-  /// In production, this calls FirebaseAuth.verifyPhoneNumber.
-  Future<bool> sendOtp(String phoneNumber) async {
-    _isLoading = true;
-    _phoneNumber = phoneNumber;
-    notifyListeners();
-
-    try {
-      // Simulate OTP sending delay
-      await Future.delayed(const Duration(seconds: 2));
-      _verificationId = 'mock_verification_id';
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } catch (e) {
-      _isLoading = false;
-      notifyListeners();
-      debugPrint('Error sending OTP: $e');
-      return false;
-    }
+  AuthService() {
+    // Optionally check if user is already authenticated via secure storage / Hive.
+    // For now, we leave it as not authenticated until login.
   }
 
-  /// Verify the OTP entered by the user.
-  /// In production, this creates a PhoneAuthCredential and signs in.
-  Future<bool> verifyOtp(String otp) async {
+  Future<bool> login(String identifier, String password) async {
     _isLoading = true;
     notifyListeners();
 
-    try {
-      // Simulate verification delay
-      await Future.delayed(const Duration(seconds: 1));
+    final result = await _apiService.login(identifier, password);
 
-      // Mock: accept any 6-digit OTP
-      if (otp.length == 6) {
-        _isAuthenticated = true;
-        _userId = 'user_001';
-        _isLoading = false;
-        notifyListeners();
-        return true;
+    if (result != null) {
+      _isAuthenticated = true;
+      _userId = result['user']['id'];
+      _phoneNumber = result['user']['phone'] ?? identifier;
+      
+      // Check if user profile exists
+      final profile = await _apiService.getUser(_userId!);
+      _userProfileExists = profile != null;
+
+      // Sync all user's data from backend MongoDB
+      await loadAppData(_userId!);
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return result != null;
+  }
+
+  Future<void> loadAppData(String userId) async {
+    try {
+      // 1. User profile
+      final userMap = await _apiService.getUser(userId);
+      if (userMap != null) {
+        MockData.currentUser = UserModel.fromMap(userMap, userId);
       }
 
-      _isLoading = false;
-      notifyListeners();
-      return false;
+      // 2. Fields
+      final fieldsList = await _apiService.getFieldsStream(userId).first;
+      MockData.fields.clear();
+      MockData.fields.addAll(fieldsList.map((m) => FieldModel.fromMap(m, m['id'] ?? m['_id'])));
+
+      // 3. Crops
+      MockData.crops.clear();
+      for (final f in MockData.fields) {
+        final cropsList = await _apiService.getCropsStream(f.id).first;
+        MockData.crops.addAll(cropsList.map((m) => CropModel.fromMap(m, m['id'] ?? m['_id'])));
+      }
+
+      // 4. Activities
+      MockData.activities.clear();
+      for (final c in MockData.crops) {
+        final actList = await _apiService.getActivitiesStream(c.id).first;
+        MockData.activities.addAll(actList.map((m) => ActivityModel.fromMap(m, m['id'] ?? m['_id'])));
+      }
+
+      // 5. Action Points
+      final apList = await _apiService.getActionPointsStream(scope: 'farmer', refId: userId).first;
+      MockData.actionPoints.clear();
+      MockData.actionPoints.addAll(apList.map((m) => ActionPointModel.fromMap(m, m['id'] ?? m['_id'])));
+
+      // 6. Financials
+      MockData.financials.clear();
+      for (final c in MockData.crops) {
+        final finMap = await _apiService.getFinancials(c.id);
+        if (finMap != null) {
+          MockData.financials.add(FinancialModel.fromMap(finMap, finMap['id'] ?? finMap['_id'] ?? c.id));
+        }
+      }
+      
+      debugPrint('[AuthService] Successfully loaded user app data from MongoDB.');
     } catch (e) {
-      _isLoading = false;
-      notifyListeners();
-      debugPrint('Error verifying OTP: $e');
-      return false;
+      debugPrint('[AuthService] Error loading user app data from MongoDB: $e');
     }
   }
 
-  /// Sign out the current user.
   Future<void> signOut() async {
     _isAuthenticated = false;
     _userId = null;
     _phoneNumber = null;
-    _verificationId = null;
+    _userProfileExists = false;
     notifyListeners();
+    // clear tokens from storage
   }
 
-  /// Quick login for development (bypasses OTP).
   void devLogin() {
     _isAuthenticated = true;
     _userId = 'user_001';
     _phoneNumber = '+91 98765 43210';
-    notifyListeners();
+    _userProfileExists = true;
+    loadAppData('user_001').then((_) {
+      notifyListeners();
+    });
   }
 }

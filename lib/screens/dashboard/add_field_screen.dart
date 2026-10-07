@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:uuid/uuid.dart';
+import '../../models/field_model.dart';
+import '../../services/api_service.dart';
+import '../../services/mock_data.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/geo_utils.dart';
+import 'mark_field_boundary_screen.dart';
 
 /// Add Field screen — form to create a new agricultural field.
 /// Collects: name, area, GPS location, soil type.
@@ -18,9 +25,9 @@ class _AddFieldScreenState extends State<AddFieldScreen> {
   String _selectedSoilType = 'Black Cotton';
   String _areaUnit = 'Acres';
   bool _isLoading = false;
-  bool _locationDetected = false;
   double? _latitude;
   double? _longitude;
+  List<FieldBoundaryPoint> _boundaryPoints = [];
 
   final _soilTypes = [
     'Black Cotton',
@@ -169,20 +176,20 @@ class _AddFieldScreenState extends State<AddFieldScreen> {
 
               const SizedBox(height: 22),
 
-              // GPS Location
-              _buildLabel('GPS Location'),
+              // Field Boundary
+              _buildLabel('Field Boundary'),
               const SizedBox(height: 8),
               GestureDetector(
-                onTap: _detectLocation,
+                onTap: _markBoundary,
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: _locationDetected
+                    color: _boundaryPoints.isNotEmpty
                         ? AppColors.successLight
                         : AppColors.surfaceVariant,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: _locationDetected
+                      color: _boundaryPoints.isNotEmpty
                           ? AppColors.primary
                           : AppColors.border,
                     ),
@@ -190,10 +197,10 @@ class _AddFieldScreenState extends State<AddFieldScreen> {
                   child: Row(
                     children: [
                       Icon(
-                        _locationDetected
+                        _boundaryPoints.isNotEmpty
                             ? Icons.check_circle
-                            : Icons.my_location,
-                        color: _locationDetected
+                            : Icons.map_outlined,
+                        color: _boundaryPoints.isNotEmpty
                             ? AppColors.primary
                             : AppColors.textSecondary,
                       ),
@@ -203,18 +210,18 @@ class _AddFieldScreenState extends State<AddFieldScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _locationDetected
-                                  ? 'Location Detected'
-                                  : 'Tap to detect location',
+                              _boundaryPoints.isNotEmpty
+                                  ? '${_boundaryPoints.length} points marked'
+                                  : 'Tap to mark field boundary on map',
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
-                                color: _locationDetected
+                                color: _boundaryPoints.isNotEmpty
                                     ? AppColors.primaryDark
                                     : AppColors.textPrimary,
                               ),
                             ),
-                            if (_locationDetected && _latitude != null)
+                            if (_boundaryPoints.isNotEmpty && _latitude != null)
                               Text(
                                 '${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)}',
                                 style: const TextStyle(
@@ -225,7 +232,12 @@ class _AddFieldScreenState extends State<AddFieldScreen> {
                           ],
                         ),
                       ),
-                      if (!_locationDetected)
+                      if (_boundaryPoints.isNotEmpty)
+                        TextButton(
+                          onPressed: _markBoundary,
+                          child: const Text('Redraw'),
+                        )
+                      else
                         const Icon(
                           Icons.arrow_forward_ios,
                           size: 14,
@@ -308,33 +320,80 @@ class _AddFieldScreenState extends State<AddFieldScreen> {
     );
   }
 
-  Future<void> _detectLocation() async {
-    // Simulate GPS location detection
-    setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 1));
+  Future<void> _markBoundary() async {
+    final points = await Navigator.push<List<LatLng>>(
+      context,
+      MaterialPageRoute(builder: (_) => const MarkFieldBoundaryScreen()),
+    );
+    if (points == null || points.length != 4) return;
+
+    final centroid = centroidOf(points);
+    final areaAcres = polygonAreaInAcres(points);
+
     setState(() {
-      _latitude = 18.5204;
-      _longitude = 73.8567;
-      _locationDetected = true;
-      _isLoading = false;
+      _boundaryPoints = points
+          .map((p) => FieldBoundaryPoint(lat: p.latitude, lng: p.longitude))
+          .toList();
+      _latitude = centroid.latitude;
+      _longitude = centroid.longitude;
+      _areaController.text = areaAcres.toStringAsFixed(2);
+      _areaUnit = 'Acres';
     });
   }
 
   Future<void> _saveField() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_boundaryPoints.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please mark the field boundary on the map')),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 1));
 
-    if (mounted) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Field added successfully! 🌾'),
-          backgroundColor: AppColors.primary,
-        ),
-      );
-      Navigator.pop(context);
+    final newField = FieldModel(
+      id: const Uuid().v4(),
+      ownerId: MockData.currentUser.id,
+      name: _nameController.text.trim(),
+      area: double.parse(_areaController.text),
+      latitude: _latitude,
+      longitude: _longitude,
+      boundaryPoints: _boundaryPoints,
+      soilType: _selectedSoilType,
+      createdAt: DateTime.now(),
+      healthStatus: 'good',
+      activeCrops: 0,
+      pendingActions: 0,
+    );
+
+    try {
+      // Save to MongoDB backend
+      await ApiService().addField(newField.toMap()..['id'] = newField.id);
+      
+      // Append locally so UI updates instantly
+      MockData.fields.add(newField);
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Field added successfully! 🌾'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving field to backend: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 }

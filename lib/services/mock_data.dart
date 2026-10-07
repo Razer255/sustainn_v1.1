@@ -2,6 +2,7 @@ import '../models/user_model.dart';
 import '../models/field_model.dart';
 import '../models/crop_model.dart';
 import '../models/activity_model.dart';
+import '../models/activity_taxonomy.dart';
 import '../models/action_point_model.dart';
 import '../models/financial_model.dart';
 
@@ -10,7 +11,7 @@ import '../models/financial_model.dart';
 class MockData {
   MockData._();
 
-  static final UserModel currentUser = UserModel(
+  static UserModel currentUser = UserModel(
     id: 'user_001',
     phone: '+91 98765 43210',
     name: 'Rajesh Kumar',
@@ -19,7 +20,7 @@ class MockData {
     createdAt: DateTime(2025, 3, 15),
   );
 
-  static final List<FieldModel> fields = [
+  static List<FieldModel> fields = [
     FieldModel(
       id: 'field_001',
       ownerId: 'user_001',
@@ -61,7 +62,7 @@ class MockData {
     ),
   ];
 
-  static final List<CropModel> crops = [
+  static List<CropModel> crops = [
     CropModel(
       id: 'crop_001',
       fieldId: 'field_001',
@@ -71,6 +72,7 @@ class MockData {
       sownDate: DateTime(2026, 6, 15),
       expectedHarvestDate: DateTime(2026, 10, 20),
       status: CropStatus.active,
+      areaCovered: 1.5,
       healthStatus: 'good',
       activityCount: 12,
     ),
@@ -83,6 +85,8 @@ class MockData {
       sownDate: DateTime(2026, 6, 1),
       expectedHarvestDate: DateTime(2026, 11, 30),
       status: CropStatus.active,
+      isIntercrop: true, // grown alongside Rice on the same land
+      areaCovered: 0.8,
       healthStatus: 'moderate',
       activityCount: 8,
     ),
@@ -95,6 +99,7 @@ class MockData {
       sownDate: DateTime(2026, 6, 20),
       expectedHarvestDate: DateTime(2026, 10, 15),
       status: CropStatus.active,
+      areaCovered: 1.8,
       healthStatus: 'good',
       activityCount: 6,
     ),
@@ -107,16 +112,18 @@ class MockData {
       sownDate: DateTime(2026, 2, 10),
       expectedHarvestDate: DateTime(2027, 1, 15),
       status: CropStatus.active,
+      areaCovered: 3.0,
       healthStatus: 'poor',
       activityCount: 15,
     ),
   ];
 
-  static final List<ActivityModel> activities = [
+  static List<ActivityModel> activities = [
     ActivityModel(
       id: 'act_001',
       cropId: 'crop_001',
-      type: ActivityType.sowing,
+      category: ActivityCategory.sowing,
+      subtypeCode: 'SW_TRANSPLANT',
       date: DateTime(2026, 6, 15),
       notes: 'Transplanted nursery seedlings to main field',
       cost: 3500,
@@ -127,7 +134,8 @@ class MockData {
     ActivityModel(
       id: 'act_002',
       cropId: 'crop_001',
-      type: ActivityType.irrigation,
+      category: ActivityCategory.irrigation,
+      subtypeCode: 'IR_FLOOD',
       date: DateTime(2026, 6, 22),
       notes: 'First irrigation after transplanting',
       cost: 500,
@@ -138,7 +146,8 @@ class MockData {
     ActivityModel(
       id: 'act_003',
       cropId: 'crop_001',
-      type: ActivityType.fertilizer,
+      category: ActivityCategory.nutrient,
+      subtypeCode: 'NU_BASAL',
       date: DateTime(2026, 7, 1),
       notes: 'Applied DAP fertilizer (first dose)',
       cost: 1800,
@@ -149,7 +158,8 @@ class MockData {
     ActivityModel(
       id: 'act_004',
       cropId: 'crop_001',
-      type: ActivityType.pesticide,
+      category: ActivityCategory.plantProtect,
+      subtypeCode: 'PP_INSECTICIDE',
       date: DateTime(2026, 7, 15),
       notes: 'Sprayed Chlorantraniliprole for stem borer prevention',
       cost: 1200,
@@ -160,7 +170,8 @@ class MockData {
     ActivityModel(
       id: 'act_005',
       cropId: 'crop_001',
-      type: ActivityType.weeding,
+      category: ActivityCategory.weed,
+      subtypeCode: 'WD_MANUAL',
       date: DateTime(2026, 7, 20),
       notes: 'Manual weeding by laborers',
       cost: 2500,
@@ -169,7 +180,8 @@ class MockData {
     ActivityModel(
       id: 'act_006',
       cropId: 'crop_001',
-      type: ActivityType.irrigation,
+      category: ActivityCategory.irrigation,
+      subtypeCode: 'IR_FLOOD',
       date: DateTime(2026, 7, 28),
       notes: 'Second irrigation cycle',
       cost: 500,
@@ -180,7 +192,8 @@ class MockData {
     ActivityModel(
       id: 'act_007',
       cropId: 'crop_002',
-      type: ActivityType.sowing,
+      category: ActivityCategory.sowing,
+      subtypeCode: 'SW_BROADCAST',
       date: DateTime(2026, 6, 1),
       notes: 'Direct seeding of Bt Cotton seeds',
       cost: 4500,
@@ -191,7 +204,8 @@ class MockData {
     ActivityModel(
       id: 'act_008',
       cropId: 'crop_002',
-      type: ActivityType.fertilizer,
+      category: ActivityCategory.nutrient,
+      subtypeCode: 'NU_BASAL',
       date: DateTime(2026, 6, 25),
       notes: 'Applied Urea (first dose)',
       cost: 900,
@@ -201,7 +215,7 @@ class MockData {
     ),
   ];
 
-  static final List<ActionPointModel> actionPoints = [
+  static List<ActionPointModel> actionPoints = [
     ActionPointModel(
       id: 'ap_001',
       scope: ActionScope.crop,
@@ -264,7 +278,7 @@ class MockData {
     ),
   ];
 
-  static final List<FinancialModel> financials = [
+  static List<FinancialModel> financials = [
     FinancialModel(
       id: 'fin_001',
       cropId: 'crop_001',
@@ -303,6 +317,15 @@ class MockData {
 
   static List<CropModel> getCropsForField(String fieldId) {
     return crops.where((c) => c.fieldId == fieldId).toList();
+  }
+
+  /// Sum of `areaCovered` for the field's non-intercrop crops — intercrop
+  /// crops share land with the field's main crop rather than consuming
+  /// additional area, so they're excluded from this capacity total.
+  static double getNonIntercropAreaForField(String fieldId) {
+    return getCropsForField(fieldId)
+        .where((c) => !c.isIntercrop)
+        .fold<double>(0, (sum, c) => sum + c.areaCovered);
   }
 
   static List<ActivityModel> getActivitiesForCrop(String cropId) {

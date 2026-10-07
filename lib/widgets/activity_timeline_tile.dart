@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/activity_model.dart';
+import '../models/activity_taxonomy.dart';
 import '../theme/app_colors.dart';
 
 /// A timeline tile for displaying a farming activity entry.
@@ -99,12 +100,12 @@ class ActivityTimelineTile extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              activity.type.emoji,
+                              activity.category.emoji,
                               style: const TextStyle(fontSize: 12),
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              activity.type.label,
+                              activity.displayLabel,
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
@@ -177,6 +178,26 @@ class ActivityTimelineTile extends StatelessWidget {
                       ],
                     ),
                   ],
+
+                  // Area covered
+                  if (activity.areaCovered != null) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.crop_square,
+                            size: 13, color: AppColors.textSecondary),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${NumberFormat('#,##0.##').format(activity.areaCovered)} ${activity.areaUnit ?? ''}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -187,33 +208,41 @@ class ActivityTimelineTile extends StatelessWidget {
   }
 
   Color get _typeColor {
-    switch (activity.type) {
-      case ActivityType.irrigation:
-        return Colors.blue;
-      case ActivityType.fertilizer:
-        return AppColors.primary;
-      case ActivityType.pesticide:
-        return Colors.orange;
-      case ActivityType.harvest:
-        return Colors.amber.shade700;
-      case ActivityType.sowing:
+    switch (activity.category) {
+      case ActivityCategory.landPrep:
+        return Colors.brown;
+      case ActivityCategory.nursery:
+        return Colors.lightGreen.shade700;
+      case ActivityCategory.sowing:
         return Colors.teal;
-      case ActivityType.weeding:
+      case ActivityCategory.nutrient:
+        return AppColors.primary;
+      case ActivityCategory.irrigation:
+        return Colors.blue;
+      case ActivityCategory.weed:
         return Colors.green.shade700;
-      case ActivityType.soilTesting:
-        return Colors.purple;
-      case ActivityType.other:
+      case ActivityCategory.plantProtect:
+        return Colors.orange;
+      case ActivityCategory.interculture:
+        return Colors.indigo;
+      case ActivityCategory.harvest:
+        return Colors.amber.shade700;
+      case ActivityCategory.postHarvest:
+        return Colors.deepOrange;
+      case ActivityCategory.residue:
+        return Colors.brown.shade400;
+      case ActivityCategory.other:
         return AppColors.textSecondary;
     }
   }
 
   IconData get _quantityIcon {
-    switch (activity.type) {
-      case ActivityType.irrigation:
+    switch (activity.category) {
+      case ActivityCategory.irrigation:
         return Icons.water_drop_outlined;
-      case ActivityType.fertilizer:
+      case ActivityCategory.nutrient:
         return Icons.science_outlined;
-      case ActivityType.pesticide:
+      case ActivityCategory.plantProtect:
         return Icons.science_outlined;
       default:
         return Icons.straighten;

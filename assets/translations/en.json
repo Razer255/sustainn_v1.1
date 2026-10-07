@@ -32,7 +32,11 @@
     "submit": "Create Account",
     "already_have_account": "Already have an account?",
     "login": "Login",
-    "success": "Account created successfully! Please login."
+    "success": "Account created successfully! Please login.",
+    "aadhar": "Aadhar Card Details",
+    "aadhar_hint": "Enter 12-digit Aadhar number",
+    "mpin": "Set MPIN",
+    "mpin_hint": "4 to 6 digit PIN for quick login"
   },
 
   "dashboard": {

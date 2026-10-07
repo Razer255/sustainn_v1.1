@@ -35,6 +35,11 @@ class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
       ActionScope.field,
       widget.fieldId,
     );
+    final totalCost = crops.fold<double>(
+      0.0,
+      (sum, crop) => sum + MockData.getTotalInputCostForCrop(crop.id),
+    );
+    final areaUsed = MockData.getNonIntercropAreaForField(widget.fieldId);
 
     return Scaffold(
       body: CustomScrollView(
@@ -166,13 +171,19 @@ class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
                   // ── Field Summary Stats ──
                   SummaryStatRow(stats: [
                     SummaryStat(
-                      value: '${field.area}',
-                      label: 'Acres',
+                      value: '${areaUsed.toStringAsFixed(1)}/${field.area.toStringAsFixed(1)}',
+                      label: 'Acres Used',
+                      color: areaUsed > field.area ? AppColors.warning : null,
                     ),
                     SummaryStat(
                       value: '${crops.length}',
                       label: 'Crops',
                       color: AppColors.primary,
+                    ),
+                    SummaryStat(
+                      value: '₹${totalCost.toStringAsFixed(0)}',
+                      label: 'Cost',
+                      color: Colors.green.shade700,
                     ),
                     SummaryStat(
                       value: '${field.pendingActions}',
@@ -210,11 +221,14 @@ class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
 
                   ...crops.map((crop) => _CropCard(
                         crop: crop,
-                        onTap: () => Navigator.pushNamed(
-                          context,
-                          '/crop-summary',
-                          arguments: crop.id,
-                        ),
+                        onTap: () async {
+                          await Navigator.pushNamed(
+                            context,
+                            '/crop-summary',
+                            arguments: crop.id,
+                          );
+                          setState(() {});
+                        },
                       )),
 
                   if (crops.isEmpty)
@@ -275,8 +289,11 @@ class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
       ),
 
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.pushNamed(context, '/add-crop',
-            arguments: widget.fieldId),
+        onPressed: () async {
+          await Navigator.pushNamed(context, '/add-crop',
+              arguments: widget.fieldId);
+          setState(() {});
+        },
         icon: const Icon(Icons.add),
         label: const Text('Add Crop'),
       ),
@@ -293,6 +310,7 @@ class _CropCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cropCost = MockData.getTotalInputCostForCrop(crop.id);
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -335,7 +353,7 @@ class _CropCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    '${crop.variety} • ${crop.activityCount} activities',
+                    '${crop.variety} • ${crop.activityCount} activities • ₹${cropCost.toStringAsFixed(0)}',
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.textSecondary,

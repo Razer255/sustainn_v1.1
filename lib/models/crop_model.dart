@@ -9,6 +9,8 @@ class CropModel {
   final DateTime sownDate;
   final DateTime? expectedHarvestDate;
   final CropStatus status;
+  final bool isIntercrop; // grown alongside another crop on the same land
+  final double areaCovered; // acres
 
   // Computed / UI-only
   final String? healthStatus; // 'good', 'moderate', 'poor'
@@ -23,6 +25,8 @@ class CropModel {
     required this.sownDate,
     this.expectedHarvestDate,
     required this.status,
+    this.isIntercrop = false,
+    this.areaCovered = 0,
     this.healthStatus,
     this.activityCount = 0,
   });
@@ -41,6 +45,8 @@ class CropModel {
           ? DateTime.parse(map['expectedHarvestDate'])
           : null,
       status: CropStatus.fromString(map['status'] ?? 'active'),
+      isIntercrop: map['isIntercrop'] ?? false,
+      areaCovered: (map['areaCovered'] ?? 0).toDouble(),
       healthStatus: map['healthStatus'],
       activityCount: map['activityCount'] ?? 0,
     );
@@ -55,6 +61,8 @@ class CropModel {
       'sownDate': sownDate.toIso8601String(),
       'expectedHarvestDate': expectedHarvestDate?.toIso8601String(),
       'status': status.value,
+      'isIntercrop': isIntercrop,
+      'areaCovered': areaCovered,
     };
   }
 
@@ -67,6 +75,8 @@ class CropModel {
     DateTime? sownDate,
     DateTime? expectedHarvestDate,
     CropStatus? status,
+    bool? isIntercrop,
+    double? areaCovered,
     String? healthStatus,
     int? activityCount,
   }) {
@@ -79,6 +89,8 @@ class CropModel {
       sownDate: sownDate ?? this.sownDate,
       expectedHarvestDate: expectedHarvestDate ?? this.expectedHarvestDate,
       status: status ?? this.status,
+      isIntercrop: isIntercrop ?? this.isIntercrop,
+      areaCovered: areaCovered ?? this.areaCovered,
       healthStatus: healthStatus ?? this.healthStatus,
       activityCount: activityCount ?? this.activityCount,
     );

@@ -93,17 +93,23 @@ class CropSummaryScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 12),
                         // Status chips row
-                        Row(
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
                           children: [
                             _HeaderChip(
                               icon: Icons.calendar_today,
                               text: '${crop.daysSinceSowing}d since sowing',
                             ),
-                            const SizedBox(width: 8),
                             if (crop.daysToHarvest > 0)
                               _HeaderChip(
                                 icon: Icons.timer_outlined,
                                 text: '${crop.daysToHarvest}d to harvest',
+                              ),
+                            if (crop.isIntercrop)
+                              const _HeaderChip(
+                                icon: Icons.grass,
+                                text: 'Intercrop',
                               ),
                           ],
                         ),
@@ -121,6 +127,13 @@ class CropSummaryScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── Crop Details ──
+                  _buildSectionTitle('Crop Details'),
+                  const SizedBox(height: 12),
+                  _CropDetailsCard(crop: crop),
+
+                  const SizedBox(height: 24),
+
                   // ── Crop Health Summary ──
                   _buildSectionTitle('Health Summary'),
                   const SizedBox(height: 12),
@@ -251,6 +264,86 @@ class _HeaderChip extends StatelessWidget {
               fontSize: 11,
               color: Colors.white,
               fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Plain attribute listing for the crop — name, variety, season, dates,
+/// area covered and intercrop status.
+class _CropDetailsCard extends StatelessWidget {
+  final dynamic crop; // CropModel
+
+  const _CropDetailsCard({required this.crop});
+
+  @override
+  Widget build(BuildContext context) {
+    final dateFormat = DateFormat('dd MMM yyyy');
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border.withOpacity(0.5)),
+      ),
+      child: Column(
+        children: [
+          _DetailRow(label: 'Crop', value: crop.cropName),
+          _DetailRow(label: 'Variety', value: crop.variety),
+          _DetailRow(label: 'Season', value: crop.season),
+          _DetailRow(label: 'Sown Date', value: dateFormat.format(crop.sownDate)),
+          _DetailRow(
+            label: 'Expected Harvest',
+            value: crop.expectedHarvestDate != null
+                ? dateFormat.format(crop.expectedHarvestDate)
+                : 'Not set',
+          ),
+          _DetailRow(
+            label: 'Area Covered',
+            value: '${(crop.areaCovered as double).toStringAsFixed(1)} acres',
+          ),
+          _DetailRow(
+            label: 'Intercrop',
+            value: crop.isIntercrop ? 'Yes' : 'No',
+            isLast: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool isLast;
+
+  const _DetailRow({
+    required this.label,
+    required this.value,
+    this.isLast = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: isLast ? 0 : 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
             ),
           ),
         ],

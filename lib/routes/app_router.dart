@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
+import '../screens/auth/language_selection_screen.dart';
+
 import '../screens/dashboard/dashboard_screen.dart';
 import '../screens/dashboard/add_field_screen.dart';
 import '../screens/field/field_summary_screen.dart';
@@ -13,6 +15,8 @@ import '../screens/crop/add_activity_screen.dart';
 class AppRouter {
   static const String login = '/login';
   static const String signup = '/signup';
+  static const String languageSelection = '/language-selection';
+
   static const String dashboard = '/dashboard';
   static const String addField = '/add-field';
   static const String fieldSummary = '/field-summary';
@@ -28,6 +32,11 @@ class AppRouter {
       case signup:
         return _buildRoute(const SignupScreen(), settings);
 
+      case languageSelection:
+        return _buildRoute(const LanguageSelectionScreen(), settings);
+
+
+
       case dashboard:
         return _buildRoute(const DashboardScreen(), settings);
 
@@ -35,28 +44,32 @@ class AppRouter {
         return _buildRoute(const AddFieldScreen(), settings);
 
       case fieldSummary:
-        final fieldId = settings.arguments as String;
+        final fieldId = settings.arguments as String?;
+        if (fieldId == null) return _buildRoute(const DashboardScreen(), settings);
         return _buildRoute(
           FieldSummaryScreen(fieldId: fieldId),
           settings,
         );
 
       case addCrop:
-        final fieldId = settings.arguments as String;
+        final fieldId = settings.arguments as String?;
+        if (fieldId == null) return _buildRoute(const DashboardScreen(), settings);
         return _buildRoute(
           AddCropScreen(fieldId: fieldId),
           settings,
         );
 
       case cropSummary:
-        final cropId = settings.arguments as String;
+        final cropId = settings.arguments as String?;
+        if (cropId == null) return _buildRoute(const DashboardScreen(), settings);
         return _buildRoute(
           CropSummaryScreen(cropId: cropId),
           settings,
         );
 
       case addActivity:
-        final cropId = settings.arguments as String;
+        final cropId = settings.arguments as String?;
+        if (cropId == null) return _buildRoute(const DashboardScreen(), settings);
         return _buildRoute(
           AddActivityScreen(cropId: cropId),
           settings,

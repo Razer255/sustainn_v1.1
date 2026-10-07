@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:uuid/uuid.dart';
+import '../../models/crop_model.dart';
+import '../../services/api_service.dart';
+import '../../services/mock_data.dart';
 import '../../theme/app_colors.dart';
 
 /// Add Crop screen — form to add a new crop to a field.
@@ -16,11 +21,13 @@ class _AddCropScreenState extends State<AddCropScreen> {
   final _formKey = GlobalKey<FormState>();
   final _varietyController = TextEditingController();
   final _searchController = TextEditingController();
+  final _areaController = TextEditingController();
   String? _selectedCrop;
   DateTime _sownDate = DateTime.now();
   DateTime? _expectedHarvest;
   bool _isLoading = false;
   bool _showCropSearch = false;
+  bool _isIntercrop = false;
 
   final _cropList = [
     'Rice (Paddy)',
@@ -61,6 +68,7 @@ class _AddCropScreenState extends State<AddCropScreen> {
   void dispose() {
     _varietyController.dispose();
     _searchController.dispose();
+    _areaController.dispose();
     super.dispose();
   }
 
@@ -188,6 +196,52 @@ class _AddCropScreenState extends State<AddCropScreen> {
 
               const SizedBox(height: 22),
 
+              // Area Covered
+              _buildLabel('Area Covered (acres)'),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _areaController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d*')),
+                ],
+                decoration: const InputDecoration(
+                  hintText: '0.0',
+                  prefixIcon: Icon(Icons.crop_square),
+                ),
+                validator: (val) {
+                  final area = double.tryParse(val ?? '');
+                  if (area == null || area <= 0) {
+                    return 'Please enter the area covered by this crop';
+                  }
+                  return null;
+                },
+                onChanged: (_) => setState(() {}), // refresh capacity helper text
+              ),
+              const SizedBox(height: 6),
+              _buildCapacityHelperText(),
+
+              const SizedBox(height: 14),
+
+              // Intercrop checkbox
+              CheckboxListTile(
+                value: _isIntercrop,
+                onChanged: (val) => setState(() => _isIntercrop = val ?? false),
+                title: const Text(
+                  'This is an intercrop',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  'Grown alongside another crop on the same land',
+                  style: TextStyle(fontSize: 12),
+                ),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                activeColor: AppColors.primary,
+              ),
+
+              const SizedBox(height: 6),
+
               // Sowing Date
               _buildLabel('Sowing Date'),
               const SizedBox(height: 8),
@@ -251,6 +305,59 @@ class _AddCropScreenState extends State<AddCropScreen> {
     );
   }
 
+  /// Live "X of Y acres available" hint under the area field. Intercrop
+  /// crops share land with the field's main crop, so they never count
+  /// toward this and never show a warning here.
+  Widget _buildCapacityHelperText() {
+    final field = MockData.fields.firstWhere((f) => f.id == widget.fieldId);
+    final used = MockData.getNonIntercropAreaForField(widget.fieldId);
+    final available = field.area - used;
+    final entered = double.tryParse(_areaController.text) ?? 0;
+
+    final wouldOverflow = !_isIntercrop && entered > available;
+
+    return Text(
+      wouldOverflow
+          ? 'Only ${available.toStringAsFixed(1)} of ${field.area.toStringAsFixed(1)} acres available on ${field.name}'
+          : '${available.toStringAsFixed(1)} of ${field.area.toStringAsFixed(1)} acres available on ${field.name}',
+      style: TextStyle(
+        fontSize: 12,
+        color: wouldOverflow ? AppColors.warning : AppColors.textSecondary,
+        fontWeight: wouldOverflow ? FontWeight.w600 : FontWeight.w400,
+      ),
+    );
+  }
+
+  /// Soft warning, always overridable — matches the app's "the farmer knows
+  /// his field" philosophy used elsewhere (e.g. activity logging).
+  Future<bool?> _confirmOverAllocation({
+    required String fieldName,
+    required double available,
+    required double fieldArea,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Area exceeds field capacity'),
+        content: Text(
+          'This exceeds $fieldName\'s remaining area '
+          '(${available.toStringAsFixed(1)} of ${fieldArea.toStringAsFixed(1)} acres available). '
+          'Save anyway?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save Anyway'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _saveCrop() async {
     if (_selectedCrop == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -260,18 +367,74 @@ class _AddCropScreenState extends State<AddCropScreen> {
     }
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 1));
+    final area = double.parse(_areaController.text);
+    final field = MockData.fields.firstWhere((f) => f.id == widget.fieldId);
 
-    if (mounted) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Crop added successfully! 🌱'),
-          backgroundColor: AppColors.primary,
-        ),
-      );
-      Navigator.pop(context);
+    // Warn but allow — intercrop area shares land and is excluded entirely.
+    if (!_isIntercrop) {
+      final used = MockData.getNonIntercropAreaForField(widget.fieldId);
+      final available = field.area - used;
+      if (area > available) {
+        final proceed = await _confirmOverAllocation(
+          fieldName: field.name,
+          available: available,
+          fieldArea: field.area,
+        );
+        if (proceed != true) return;
+      }
+    }
+
+    setState(() => _isLoading = true);
+
+    final newCrop = CropModel(
+      id: const Uuid().v4(),
+      fieldId: widget.fieldId,
+      season: 'Kharif 2026',
+      cropName: _selectedCrop!,
+      variety: _varietyController.text.trim(),
+      sownDate: _sownDate,
+      expectedHarvestDate: _expectedHarvest,
+      status: CropStatus.active,
+      isIntercrop: _isIntercrop,
+      areaCovered: area,
+      healthStatus: 'good',
+      activityCount: 0,
+    );
+
+    try {
+      // Save to MongoDB backend
+      await ApiService().addCrop(newCrop.toMap()..['id'] = newCrop.id);
+      
+      // Update field active crops count locally
+      final fieldIndex = MockData.fields.indexWhere((f) => f.id == widget.fieldId);
+      if (fieldIndex != -1) {
+        final f = MockData.fields[fieldIndex];
+        MockData.fields[fieldIndex] = f.copyWith(activeCrops: f.activeCrops + 1);
+      }
+      
+      // Append locally so UI updates instantly
+      MockData.crops.add(newCrop);
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Crop added successfully! 🌱'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving crop to backend: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 }

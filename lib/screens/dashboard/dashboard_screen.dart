@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../models/action_point_model.dart';
+import '../../models/crop_model.dart';
 import '../../services/mock_data.dart';
+import '../../services/weather_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/action_point_tile.dart';
 import '../../widgets/status_chip.dart';
 import '../../widgets/summary_card.dart';
+import 'profile_tab.dart';
+import 'reports_tab.dart';
 
 /// Main dashboard screen — the farmer's home view.
 /// Shows: greeting, farmer summary stats, fields list, and action points feed.
@@ -18,6 +22,48 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentNavIndex = 0;
 
+  WeatherForecast? _weather;
+  bool _weatherLoading = true;
+  bool _weatherError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchWeather();
+  }
+
+  Future<void> _fetchWeather() async {
+    setState(() {
+      _weatherLoading = true;
+      _weatherError = false;
+    });
+
+    // Weather is anchored to the farmer's first field — no device GPS yet.
+    final fields = MockData.fields;
+    final lat = fields.isNotEmpty ? fields.first.latitude : null;
+    final lng = fields.isNotEmpty ? fields.first.longitude : null;
+
+    if (lat == null || lng == null) {
+      setState(() {
+        _weatherLoading = false;
+        _weatherError = true;
+      });
+      return;
+    }
+
+    final forecast = await WeatherService().getForecast(
+      latitude: lat,
+      longitude: lng,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _weather = forecast;
+      _weatherLoading = false;
+      _weatherError = forecast == null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = MockData.currentUser;
@@ -25,8 +71,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final actionPoints = MockData.getAllUnresolvedActionPoints();
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
+      body: IndexedStack(
+        index: _currentNavIndex,
+        children: [
+          // ── Tab 0: Home ──
+          CustomScrollView(
+            slivers: [
           // ── App Bar ──
           SliverAppBar(
             expandedHeight: 140,
@@ -156,8 +206,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: SummaryCard(
                           icon: Icons.wb_sunny_outlined,
                           title: 'Weather',
-                          value: '28°C',
-                          subtitle: 'Partly cloudy',
+                          value: _weatherLoading
+                              ? '--°C'
+                              : (_weather?.current != null
+                                  ? '${_weather!.current!.temperature.round()}°C'
+                                  : '--°C'),
+                          subtitle: _weatherLoading
+                              ? 'Loading...'
+                              : (_weather?.current?.condition.label ??
+                                  'Unavailable'),
                           iconColor: Colors.orange,
                           iconBackgroundColor: Colors.orange.shade50,
                         ),
@@ -171,8 +228,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _SectionHeader(
                     title: 'My Fields',
                     trailing: TextButton.icon(
-                      onPressed: () =>
-                          Navigator.pushNamed(context, '/add-field'),
+                      onPressed: () async {
+                        await Navigator.pushNamed(context, '/add-field');
+                        setState(() {});
+                      },
                       icon: const Icon(Icons.add, size: 18),
                       label: const Text('Add Field'),
                     ),
@@ -181,11 +240,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   ...fields.map((field) => _FieldCard(
                         field: field,
-                        onTap: () => Navigator.pushNamed(
-                          context,
-                          '/field-summary',
-                          arguments: field.id,
-                        ),
+                        onTap: () async {
+                          await Navigator.pushNamed(
+                            context,
+                            '/field-summary',
+                            arguments: field.id,
+                          );
+                          setState(() {});
+                        },
                       )),
 
                   const SizedBox(height: 28),
@@ -214,12 +276,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
-
-      // ── FAB: Add Field ──
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.pushNamed(context, '/add-field'),
-        child: const Icon(Icons.add),
+          // ── Tab 1: Fields ──
+          _buildFieldsTab(context, fields),
+          // ── Tab 2: Reports ──
+          ReportsTab(
+            weather: _weather,
+            isLoading: _weatherLoading,
+            hasError: _weatherError,
+            onRetry: _fetchWeather,
+          ),
+          // ── Tab 3: Profile ──
+          ProfileTab(user: user),
+        ],
       ),
+
+      // ── FAB: Add Activity / Add Field ──
+      floatingActionButton: _currentNavIndex == 0
+          ? FloatingActionButton(
+              onPressed: () => _showAddActivityCropSelection(context),
+              tooltip: 'Add Activity',
+              child: const Icon(Icons.add_task),
+            )
+          : _currentNavIndex == 1
+              ? FloatingActionButton(
+                  onPressed: () async {
+                    await Navigator.pushNamed(context, '/add-field');
+                    setState(() {});
+                  },
+                  tooltip: 'Add Field',
+                  child: const Icon(Icons.add),
+                )
+              : null,
 
       // ── Bottom Navigation ──
       bottomNavigationBar: NavigationBar(
@@ -251,11 +338,143 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Widget _buildFieldsTab(BuildContext context, List<dynamic> fields) {
+    return CustomScrollView(
+      slivers: [
+        SliverAppBar(
+          expandedHeight: 80,
+          floating: false,
+          pinned: true,
+          backgroundColor: AppColors.primary,
+          automaticallyImplyLeading: false,
+          flexibleSpace: FlexibleSpaceBar(
+            title: const Text(
+              'My Fields',
+              style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white, fontSize: 20),
+            ),
+            background: Container(
+              decoration: const BoxDecoration(
+                gradient: AppColors.headerGradient,
+              ),
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.all(16),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final field = fields[index];
+                return _FieldCard(
+                  field: field,
+                  onTap: () => Navigator.pushNamed(
+                    context,
+                    '/field-summary',
+                    arguments: field.id,
+                  ),
+                );
+              },
+              childCount: fields.length,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   String _getGreeting() {
     final hour = DateTime.now().hour;
     if (hour < 12) return 'Good Morning 🌅';
     if (hour < 17) return 'Good Afternoon ☀️';
     return 'Good Evening 🌙';
+  }
+
+  void _showAddActivityCropSelection(BuildContext context) {
+    final crops = MockData.crops.where((c) => c.status == CropStatus.active).toList();
+
+    if (crops.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No active crops found. Please add a crop first.'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Select Crop for Activity',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: crops.length,
+                    itemBuilder: (context, index) {
+                      final crop = crops[index];
+                      final field = MockData.fields.firstWhere(
+                        (f) => f.id == crop.fieldId,
+                        orElse: () => MockData.fields.first,
+                      );
+
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: AppColors.border.withOpacity(0.5),
+                          ),
+                        ),
+                        child: ListTile(
+                          leading: const CircleAvatar(
+                            backgroundColor: AppColors.primaryLight,
+                            child: Text('🌱'),
+                          ),
+                          title: Text(
+                            crop.cropName,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Text('${crop.variety} • ${field.name}'),
+                          trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                          onTap: () async {
+                            Navigator.pop(context);
+                            await Navigator.pushNamed(
+                              context,
+                              '/add-activity',
+                              arguments: crop.id,
+                            );
+                            setState(() {});
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 

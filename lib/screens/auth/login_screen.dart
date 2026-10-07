@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:easy_localization/easy_localization.dart';
+import '../../routes/app_router.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 
-/// Login screen with phone OTP authentication.
-/// Features the Sustainn brand green gradient header, phone input,
-/// OTP verification, and navigation to signup.
+/// Simple Login screen with Phone/Username and Password authentication.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -16,11 +16,9 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
-  final _phoneController = TextEditingController();
-  final _otpController = TextEditingController();
-  final _phoneFocusNode = FocusNode();
-  final _otpFocusNode = FocusNode();
-  bool _otpSent = false;
+  final _identifierController = TextEditingController();
+  final _passwordController = TextEditingController();
+  
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
@@ -46,10 +44,8 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   void dispose() {
-    _phoneController.dispose();
-    _otpController.dispose();
-    _phoneFocusNode.dispose();
-    _otpFocusNode.dispose();
+    _identifierController.dispose();
+    _passwordController.dispose();
     _animController.dispose();
     super.dispose();
   }
@@ -78,7 +74,6 @@ class _LoginScreenState extends State<LoginScreen>
               ),
               child: Column(
                 children: [
-                  // Logo placeholder
                   Container(
                     width: 80,
                     height: 80,
@@ -128,7 +123,7 @@ class _LoginScreenState extends State<LoginScreen>
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        _otpSent ? 'Verify OTP' : 'Welcome back',
+                        'login.title'.tr(),
                         style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w700,
@@ -137,9 +132,7 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        _otpSent
-                            ? 'Enter the 6-digit code sent to ${_phoneController.text}'
-                            : 'Login with your phone number to continue',
+                        'login.subtitle'.tr(),
                         style: const TextStyle(
                           fontSize: 14,
                           color: AppColors.textSecondary,
@@ -147,156 +140,65 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                       const SizedBox(height: 28),
 
-                      if (!_otpSent) ...[
-                        // Phone input
-                        TextField(
-                          controller: _phoneController,
-                          focusNode: _phoneFocusNode,
-                          keyboardType: TextInputType.phone,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(10),
-                          ],
-                          decoration: InputDecoration(
-                            labelText: 'Phone Number',
-                            hintText: 'Enter 10-digit phone number',
-                            prefixIcon: const Icon(Icons.phone_outlined),
-                            prefixText: '+91  ',
-                            prefixStyle: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
+                      // Identifier input
+                      TextField(
+                        controller: _identifierController,
+                        keyboardType: TextInputType.text,
+                        decoration: InputDecoration(
+                          labelText: 'Phone number / Username',
+                          hintText: 'Enter your phone number or username',
+                          prefixIcon: const Icon(Icons.person_outline),
                         ),
-                        const SizedBox(height: 24),
+                      ),
+                      const SizedBox(height: 20),
 
-                        // Send OTP button
-                        SizedBox(
-                          height: 52,
-                          child: ElevatedButton(
-                            onPressed: authService.isLoading
-                                ? null
-                                : () => _sendOtp(authService),
-                            child: authService.isLoading
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Text('Send OTP'),
-                          ),
+                      // Password input
+                      TextField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          hintText: 'Enter your password',
+                          prefixIcon: const Icon(Icons.lock_outline),
                         ),
-                      ] else ...[
-                        // OTP input
-                        TextField(
-                          controller: _otpController,
-                          focusNode: _otpFocusNode,
-                          keyboardType: TextInputType.number,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 12,
-                          ),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(6),
-                          ],
-                          decoration: const InputDecoration(
-                            hintText: '• • • • • •',
-                            hintStyle: TextStyle(
-                              fontSize: 24,
-                              letterSpacing: 12,
-                              color: AppColors.textHint,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Verify button
-                        SizedBox(
-                          height: 52,
-                          child: ElevatedButton(
-                            onPressed: authService.isLoading
-                                ? null
-                                : () => _verifyOtp(authService),
-                            child: authService.isLoading
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Text('Verify & Login'),
-                          ),
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        // Resend / Change number
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            TextButton(
-                              onPressed: () => _sendOtp(authService),
-                              child: const Text('Resend OTP'),
-                            ),
-                            const Text('•',
-                                style: TextStyle(color: AppColors.textHint)),
-                            TextButton(
-                              onPressed: () {
-                                setState(() {
-                                  _otpSent = false;
-                                  _otpController.clear();
-                                });
-                              },
-                              child: const Text('Change Number'),
-                            ),
-                          ],
-                        ),
-                      ],
-
+                      ),
                       const SizedBox(height: 32),
 
-                      // Divider
-                      Row(
-                        children: [
-                          const Expanded(child: Divider()),
-                          Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 16),
-                            child: Text(
-                              'New to Sustainn?',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ),
-                          const Expanded(child: Divider()),
-                        ],
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Sign up button
+                      // Login button
                       SizedBox(
                         height: 52,
-                        child: OutlinedButton(
-                          onPressed: () {
-                            Navigator.pushNamed(context, '/signup');
-                          },
-                          child: const Text('Create Account'),
+                        child: ElevatedButton(
+                          onPressed: authService.isLoading
+                              ? null
+                              : () => _login(authService),
+                          child: authService.isLoading
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text('login.verify_login'.tr()),
                         ),
                       ),
-
-                      const SizedBox(height: 40),
+                      
+                      const SizedBox(height: 24),
+                      
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('Don\'t have an account?',
+                              style: TextStyle(color: AppColors.textSecondary)),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pushNamed(context, AppRouter.signup);
+                            },
+                            child: const Text('Sign Up'),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -308,37 +210,27 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Future<void> _sendOtp(AuthService authService) async {
-    final phone = _phoneController.text.trim();
-    if (phone.length != 10) {
+  Future<void> _login(AuthService authService) async {
+    final identifier = _identifierController.text.trim();
+    final password = _passwordController.text.trim();
+    
+    if (identifier.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid 10-digit phone number')),
+        const SnackBar(content: Text('Please enter both identifier and password.')),
       );
       return;
     }
 
-    final success = await authService.sendOtp('+91$phone');
+    final success = await authService.login(identifier, password);
     if (success && mounted) {
-      setState(() => _otpSent = true);
-      _otpFocusNode.requestFocus();
-    }
-  }
-
-  Future<void> _verifyOtp(AuthService authService) async {
-    final otp = _otpController.text.trim();
-    if (otp.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter the 6-digit OTP')),
-      );
-      return;
-    }
-
-    final success = await authService.verifyOtp(otp);
-    if (success && mounted) {
-      Navigator.pushReplacementNamed(context, '/dashboard');
+      if (authService.userProfileExists) {
+        Navigator.pushReplacementNamed(context, AppRouter.dashboard);
+      } else {
+        Navigator.pushReplacementNamed(context, AppRouter.signup);
+      }
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid OTP. Please try again.')),
+        const SnackBar(content: Text('Login failed. Please check your credentials.')),
       );
     }
   }
