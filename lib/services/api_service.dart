@@ -7,7 +7,7 @@ import 'mock_data.dart';
 /// API Service providing CRUD operations for all entities via REST.
 /// Replace `_baseUrl` with your actual backend URL.
 class ApiService {
-  final String _baseUrl = 'http://localhost:3000/api';
+  final String _baseUrl = 'https://sustainn-v1-1.onrender.com/api';
   String? _authToken;
 
   void setAuthToken(String token) {
@@ -31,7 +31,7 @@ class ApiService {
         Uri.parse('$_baseUrl/auth/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'identifier': identifier, 'password': password}),
-      ).timeout(const Duration(seconds: 3));
+      ).timeout(const Duration(seconds: 45));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['token'] != null) {
