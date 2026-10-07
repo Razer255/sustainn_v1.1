@@ -50,8 +50,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-web:
-    name: Build Flutter Web
+    name: Build and deploy Flutter Web
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -61,10 +68,20 @@ jobs:
           cache: true
 
       - run: flutter pub get
-      - run: flutter build web --release
+      - run: flutter build web --release --base-href /sustainn_v1.1/
 
       - uses: actions/upload-artifact@v4
         with:
           name: sustainn-farmer-app-web
           path: build/web
           retention-days: 90
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+      - id: deployment
+        if: github.ref == 'refs/heads/main'
+        uses: actions/deploy-pages@v4
