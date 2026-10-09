@@ -1,11 +1,11 @@
 {
-    "name": "sustainn_farmer_app",
-    "short_name": "sustainn_farmer_app",
+    "name": "Sustainn Farmer App",
+    "short_name": "Sustainn",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1CBA6F",
+    "theme_color": "#1CBA6F",
+    "description": "Farm management and advisory platform for smallholder farmers.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
