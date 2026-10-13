@@ -234,6 +234,94 @@ app.get('/api/admin/crops', requireAdminKey, async (req, res) => {
   }
 });
 
+// Full drill-down for one user: their fields, each field's crops, each
+// crop's activities and financials. One aggregated call so the admin
+// dashboard doesn't need to fan out N+1 requests.
+app.get('/api/admin/users/:userId/detail', requireAdminKey, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const fields = await Field.find({ ownerId: userId }).sort({ createdAt: -1 });
+    const fieldIds = fields.map(f => f._id);
+
+    const crops = await Crop.find({ fieldId: { $in: fieldIds } }).sort({ sownDate: -1 });
+    const cropIds = crops.map(c => c._id);
+
+    const [activities, financials] = await Promise.all([
+      Activity.find({ cropId: { $in: cropIds } }).sort({ date: -1 }),
+      Financial.find({ cropId: { $in: cropIds } })
+    ]);
+
+    res.json({
+      user: {
+        id: user._id,
+        phone: user.phone,
+        name: user.name,
+        guardianName: user.guardianName,
+        language: user.language,
+        region: user.region,
+        createdAt: user.createdAt.toISOString()
+      },
+      fields: fields.map(f => ({
+        id: f._id,
+        ownerId: f.ownerId,
+        name: f.name,
+        area: f.area,
+        latitude: f.latitude,
+        longitude: f.longitude,
+        soilType: f.soilType,
+        healthStatus: f.healthStatus,
+        activeCrops: f.activeCrops,
+        pendingActions: f.pendingActions,
+        createdAt: f.createdAt.toISOString()
+      })),
+      crops: crops.map(c => ({
+        id: c._id,
+        fieldId: c.fieldId,
+        season: c.season,
+        cropName: c.cropName,
+        variety: c.variety,
+        sownDate: c.sownDate.toISOString(),
+        expectedHarvestDate: c.expectedHarvestDate ? c.expectedHarvestDate.toISOString() : null,
+        status: c.status,
+        isIntercrop: c.isIntercrop,
+        areaCovered: c.areaCovered,
+        healthStatus: c.healthStatus,
+        activityCount: c.activityCount
+      })),
+      activities: activities.map(a => ({
+        id: a._id,
+        cropId: a.cropId,
+        type: a.type,
+        subtype: a.subtype,
+        date: a.date.toISOString(),
+        areaCovered: a.areaCovered,
+        areaUnit: a.areaUnit,
+        notes: a.notes,
+        cost: a.cost,
+        quantity: a.quantity,
+        unit: a.unit,
+        createdBy: a.createdBy
+      })),
+      financials: financials.map(f => ({
+        id: f._id,
+        cropId: f.cropId,
+        inputCost: f.inputCost,
+        expectedRevenue: f.expectedRevenue,
+        actualRevenue: f.actualRevenue,
+        updatedAt: f.updatedAt.toISOString()
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // List issue reports. ?status=open|resolved filters; omit for all.
 app.get('/api/admin/issue-reports', requireAdminKey, async (req, res) => {
   try {
@@ -567,6 +655,73 @@ app.post('/api/activities', async (req, res) => {
     }
     
     res.status(201).json({ id: activity._id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update Activity
+app.put('/api/activities/:activityId', async (req, res) => {
+  try {
+    const { type, subtype, date, areaCovered, areaUnit, notes, cost, quantity, unit, attributes } = req.body;
+    console.log(`[PUT] /api/activities/${req.params.activityId}`);
+
+    const activity = await Activity.findById(req.params.activityId);
+    if (!activity) {
+      return res.status(404).json({ error: 'Activity not found' });
+    }
+
+    const oldCost = activity.cost || 0;
+    const newCost = cost || 0;
+    const costDelta = newCost - oldCost;
+
+    activity.type = type;
+    activity.subtype = subtype;
+    activity.date = date;
+    activity.areaCovered = areaCovered;
+    activity.areaUnit = areaUnit;
+    activity.notes = notes;
+    activity.cost = cost;
+    activity.quantity = quantity;
+    activity.unit = unit;
+    activity.attributes = attributes;
+    await activity.save();
+
+    if (costDelta !== 0) {
+      await Financial.findOneAndUpdate(
+        { cropId: activity.cropId },
+        { $inc: { inputCost: costDelta } },
+        { upsert: true }
+      );
+    }
+
+    res.json({ id: activity._id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete Activity
+app.delete('/api/activities/:activityId', async (req, res) => {
+  try {
+    console.log(`[DELETE] /api/activities/${req.params.activityId}`);
+
+    const activity = await Activity.findByIdAndDelete(req.params.activityId);
+    if (!activity) {
+      return res.status(404).json({ error: 'Activity not found' });
+    }
+
+    await Crop.findByIdAndUpdate(activity.cropId, { $inc: { activityCount: -1 } });
+
+    if (activity.cost) {
+      await Financial.findOneAndUpdate(
+        { cropId: activity.cropId },
+        { $inc: { inputCost: -activity.cost } },
+        { upsert: true }
+      );
+    }
+
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

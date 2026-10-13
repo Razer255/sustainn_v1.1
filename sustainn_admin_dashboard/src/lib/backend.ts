@@ -41,6 +41,38 @@ export type AdminCrop = {
   activityCount: number;
 };
 
+export type AdminActivity = {
+  id: string;
+  cropId: string;
+  type: string;
+  subtype?: string;
+  date: string;
+  areaCovered?: number;
+  areaUnit?: string;
+  notes?: string;
+  cost?: number;
+  quantity?: number;
+  unit?: string;
+  createdBy: string;
+};
+
+export type AdminFinancial = {
+  id: string;
+  cropId: string;
+  inputCost: number;
+  expectedRevenue: number;
+  actualRevenue: number;
+  updatedAt: string;
+};
+
+export type AdminUserDetail = {
+  user: AdminUser;
+  fields: AdminField[];
+  crops: AdminCrop[];
+  activities: AdminActivity[];
+  financials: AdminFinancial[];
+};
+
 export type AdminStats = {
   userCount: number;
   fieldCount: number;
@@ -79,6 +111,8 @@ export const getStats = () => fetchFromBackend<AdminStats>('/api/admin/stats');
 export const getUsers = () => fetchFromBackend<AdminUser[]>('/api/admin/users');
 export const getFields = () => fetchFromBackend<AdminField[]>('/api/admin/fields');
 export const getCrops = () => fetchFromBackend<AdminCrop[]>('/api/admin/crops');
+export const getUserDetail = (userId: string) =>
+  fetchFromBackend<AdminUserDetail>(`/api/admin/users/${userId}/detail`);
 export const getIssueReports = () => fetchFromBackend<IssueReport[]>('/api/admin/issue-reports');
 
 export const resolveIssueReport = (id: string) =>

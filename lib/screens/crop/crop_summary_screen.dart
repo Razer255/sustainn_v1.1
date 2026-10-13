@@ -2,18 +2,96 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/action_point_model.dart';
 import '../../models/activity_model.dart';
+import '../../services/api_service.dart';
 import '../../services/mock_data.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/action_point_tile.dart';
 import '../../widgets/activity_timeline_tile.dart';
 import '../../widgets/summary_card.dart';
+import 'add_activity_screen.dart';
 
 /// Crop Summary screen — detailed view of a single crop.
 /// Shows: health summary, activities timeline, financial data, and action points.
-class CropSummaryScreen extends StatelessWidget {
+class CropSummaryScreen extends StatefulWidget {
   final String cropId;
 
   const CropSummaryScreen({super.key, required this.cropId});
+
+  @override
+  State<CropSummaryScreen> createState() => _CropSummaryScreenState();
+}
+
+class _CropSummaryScreenState extends State<CropSummaryScreen> {
+  String get cropId => widget.cropId;
+
+  Future<void> _editActivity(ActivityModel activity) async {
+    final updated = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddActivityScreen(cropId: cropId, existingActivity: activity),
+      ),
+    );
+    if (updated == true && mounted) setState(() {});
+  }
+
+  Future<void> _deleteActivity(ActivityModel activity) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete activity?'),
+        content: Text('This will remove "${activity.displayLabel}" logged on '
+            '${DateFormat('dd MMM yyyy').format(activity.date)}. This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ApiService().deleteActivity(activity.id);
+
+      MockData.activities.removeWhere((a) => a.id == activity.id);
+
+      final cropIndex = MockData.crops.indexWhere((c) => c.id == cropId);
+      if (cropIndex != -1) {
+        final c = MockData.crops[cropIndex];
+        MockData.crops[cropIndex] =
+            c.copyWith(activityCount: (c.activityCount - 1).clamp(0, 1 << 30));
+      }
+
+      if (activity.cost != null && activity.cost! > 0) {
+        final finIndex = MockData.financials.indexWhere((f) => f.cropId == cropId);
+        if (finIndex != -1) {
+          final f = MockData.financials[finIndex];
+          MockData.financials[finIndex] = f.copyWith(
+            inputCost: f.inputCost - activity.cost!,
+            updatedAt: DateTime.now(),
+          );
+        }
+      }
+
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Activity deleted'), backgroundColor: AppColors.primary),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete activity: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -157,11 +235,14 @@ class CropSummaryScreen extends StatelessWidget {
                     children: [
                       _buildSectionTitle('Activities'),
                       TextButton.icon(
-                        onPressed: () => Navigator.pushNamed(
-                          context,
-                          '/add-activity',
-                          arguments: cropId,
-                        ),
+                        onPressed: () async {
+                          final added = await Navigator.pushNamed(
+                            context,
+                            '/add-activity',
+                            arguments: cropId,
+                          );
+                          if (added == true && mounted) setState(() {});
+                        },
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('Log Activity'),
                       ),
@@ -175,6 +256,8 @@ class CropSummaryScreen extends StatelessWidget {
                         activity: entry.value,
                         isFirst: entry.key == 0,
                         isLast: entry.key == activities.length - 1,
+                        onEdit: () => _editActivity(entry.value),
+                        onDelete: () => _deleteActivity(entry.value),
                       );
                     })
                   else
@@ -218,8 +301,10 @@ class CropSummaryScreen extends StatelessWidget {
       ),
 
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () =>
-            Navigator.pushNamed(context, '/add-activity', arguments: cropId),
+        onPressed: () async {
+          final added = await Navigator.pushNamed(context, '/add-activity', arguments: cropId);
+          if (added == true && mounted) setState(() {});
+        },
         icon: const Icon(Icons.add),
         label: const Text('Log Activity'),
       ),

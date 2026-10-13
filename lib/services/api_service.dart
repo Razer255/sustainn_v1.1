@@ -326,6 +326,29 @@ class ApiService {
     }
   }
 
+  Future<void> updateActivity(String activityId, Map<String, dynamic> data) async {
+    debugPrint('[ApiService] updateActivity($activityId)');
+    final response = await http.put(
+      Uri.parse('$_baseUrl/activities/$activityId'),
+      headers: _headers,
+      body: jsonEncode(data),
+    ).timeout(const Duration(seconds: 45));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to update activity');
+    }
+  }
+
+  Future<void> deleteActivity(String activityId) async {
+    debugPrint('[ApiService] deleteActivity($activityId)');
+    final response = await http.delete(
+      Uri.parse('$_baseUrl/activities/$activityId'),
+      headers: _headers,
+    ).timeout(const Duration(seconds: 45));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete activity');
+    }
+  }
+
   // ─── Location (LGD) ─────────────────────────────────────────
   // State → District → Tehsil → Village cascade for Signup, proxied
   // through the backend so the data.gov.in API key stays server-side.

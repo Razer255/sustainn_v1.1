@@ -9,12 +9,16 @@ class ActivityTimelineTile extends StatelessWidget {
   final ActivityModel activity;
   final bool isFirst;
   final bool isLast;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   const ActivityTimelineTile({
     super.key,
     required this.activity,
     this.isFirst = false,
     this.isLast = false,
+    this.onEdit,
+    this.onDelete,
   });
 
   @override
@@ -116,13 +120,51 @@ class ActivityTimelineTile extends StatelessWidget {
                         ),
                       ),
 
-                      // Date
-                      Text(
-                        DateFormat('dd MMM yyyy').format(activity.date),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textHint,
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Date
+                          Text(
+                            DateFormat('dd MMM yyyy').format(activity.date),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textHint,
+                            ),
+                          ),
+                          if (onEdit != null || onDelete != null)
+                            PopupMenuButton<String>(
+                              padding: EdgeInsets.zero,
+                              icon: const Icon(Icons.more_vert, size: 18, color: AppColors.textHint),
+                              onSelected: (value) {
+                                if (value == 'edit') onEdit?.call();
+                                if (value == 'delete') onDelete?.call();
+                              },
+                              itemBuilder: (context) => [
+                                if (onEdit != null)
+                                  const PopupMenuItem(
+                                    value: 'edit',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.edit_outlined, size: 18, color: AppColors.textPrimary),
+                                        SizedBox(width: 8),
+                                        Text('Edit'),
+                                      ],
+                                    ),
+                                  ),
+                                if (onDelete != null)
+                                  const PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                        SizedBox(width: 8),
+                                        Text('Delete', style: TextStyle(color: Colors.red)),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                        ],
                       ),
                     ],
                   ),

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { getUsers } from '@/lib/backend';
 
 export default async function UsersPage() {
@@ -19,13 +20,25 @@ export default async function UsersPage() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {users.map((u) => (
-              <tr key={u.id}>
-                <td className="px-4 py-3 font-medium text-gray-900">{u.name}</td>
-                <td className="px-4 py-3 text-gray-600">{u.phone}</td>
-                <td className="px-4 py-3 text-gray-600">{u.region}</td>
-                <td className="px-4 py-3 text-gray-600">{u.language}</td>
+              <tr key={u.id} className="cursor-pointer hover:bg-gray-50">
+                <td className="px-4 py-3 font-medium text-gray-900">
+                  <Link href={`/users/${u.id}`} className="block hover:underline">
+                    {u.name}
+                  </Link>
+                </td>
                 <td className="px-4 py-3 text-gray-600">
-                  {new Date(u.createdAt).toLocaleDateString()}
+                  <Link href={`/users/${u.id}`} className="block">{u.phone}</Link>
+                </td>
+                <td className="px-4 py-3 text-gray-600">
+                  <Link href={`/users/${u.id}`} className="block">{u.region}</Link>
+                </td>
+                <td className="px-4 py-3 text-gray-600">
+                  <Link href={`/users/${u.id}`} className="block">{u.language}</Link>
+                </td>
+                <td className="px-4 py-3 text-gray-600">
+                  <Link href={`/users/${u.id}`} className="block">
+                    {new Date(u.createdAt).toLocaleDateString()}
+                  </Link>
                 </td>
               </tr>
             ))}

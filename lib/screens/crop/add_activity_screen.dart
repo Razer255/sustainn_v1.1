@@ -25,7 +25,13 @@ import '../../theme/app_colors.dart';
 class AddActivityScreen extends StatefulWidget {
   final String cropId;
 
-  const AddActivityScreen({super.key, required this.cropId});
+  /// When set, the screen edits this activity in place instead of
+  /// creating a new one.
+  final ActivityModel? existingActivity;
+
+  const AddActivityScreen({super.key, required this.cropId, this.existingActivity});
+
+  bool get isEditing => existingActivity != null;
 
   @override
   State<AddActivityScreen> createState() => _AddActivityScreenState();
@@ -67,8 +73,60 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedSubtype = subtypesFor(_selectedCategory).first;
-    _selectedUnit = kUnitsByCategory[_selectedCategory]?.first;
+    final existing = widget.existingActivity;
+    if (existing != null) {
+      _selectedCategory = existing.category;
+      _selectedSubtype = existing.subtype ?? subtypesFor(_selectedCategory).first;
+      _activityDate = existing.date;
+      _selectedUnit = existing.unit ?? kUnitsByCategory[_selectedCategory]?.first;
+      _areaController.text = existing.areaCovered?.toString() ?? '';
+      _areaUnit = existing.areaUnit ?? _kAreaUnits.first;
+      _notesController.text = existing.notes;
+      _costController.text = existing.cost?.toString() ?? '';
+      _quantityController.text = existing.quantity?.toString() ?? '';
+
+      final attrs = Map<String, dynamic>.from(existing.attributes);
+
+      if (_selectedCategory == ActivityCategory.nutrient) {
+        final lines = attrs.remove('productLines') as List<dynamic>? ?? [];
+        for (final line in lines) {
+          final map = line as Map<String, dynamic>;
+          _productLines.add(_ProductLine()
+            ..itemCode = map['itemCode'] as String?
+            ..quantity = (map['quantity'] as num?)?.toDouble());
+        }
+      }
+      if (_selectedCategory == ActivityCategory.weed) {
+        final species = attrs.remove('weedSpecies') as List<dynamic>? ?? [];
+        _weedSpecies.addAll(species.cast<String>());
+      }
+      if (_selectedCategory == ActivityCategory.plantProtect) {
+        final pests = attrs.remove('pestsDiseases') as List<dynamic>? ?? [];
+        _pestsDiseases.addAll(pests.cast<String>());
+      }
+
+      // Parse remaining generic attribute values, converting date strings
+      // back to DateTime so _buildDateField displays them correctly.
+      for (final entry in attrs.entries) {
+        final value = entry.value;
+        if (value is String) {
+          final parsedDate = DateTime.tryParse(value);
+          _attributeValues[entry.key] =
+              (parsedDate != null && _looksLikeDateKey(entry.key)) ? parsedDate : value;
+        } else {
+          _attributeValues[entry.key] = value;
+        }
+      }
+    } else {
+      _selectedSubtype = subtypesFor(_selectedCategory).first;
+      _selectedUnit = kUnitsByCategory[_selectedCategory]?.first;
+    }
+  }
+
+  bool _looksLikeDateKey(String key) {
+    final fields = kCategoryFields[_selectedCategory] ?? const [];
+    final match = fields.where((f) => f.key == key);
+    return match.isNotEmpty && match.first.type == ActivityFieldType.date;
   }
 
   @override
@@ -100,7 +158,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Log Activity'),
+        title: Text(widget.isEditing ? 'Edit Activity' : 'Log Activity'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -337,7 +395,9 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
                           ),
                         )
                       : const Icon(Icons.check),
-                  label: Text(_isLoading ? 'Saving...' : 'Log Activity'),
+                  label: Text(_isLoading
+                      ? 'Saving...'
+                      : (widget.isEditing ? 'Update Activity' : 'Log Activity')),
                 ),
               ),
 
@@ -723,8 +783,9 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
       attributes['pestsDiseases'] = _pestsDiseases.toList();
     }
 
-    final newActivity = ActivityModel(
-      id: const Uuid().v4(),
+    final isEditing = widget.isEditing;
+    final activity = ActivityModel(
+      id: isEditing ? widget.existingActivity!.id : const Uuid().v4(),
       cropId: widget.cropId,
       category: _selectedCategory,
       subtypeCode: _selectedSubtype.code,
@@ -735,55 +796,79 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
       cost: costVal,
       quantity: qtyVal,
       unit: _selectedUnit,
-      createdBy: MockData.currentUser.id,
+      createdBy: isEditing ? widget.existingActivity!.createdBy : MockData.currentUser.id,
       attributes: attributes,
     );
 
     try {
-      // Save to MongoDB backend
-      await ApiService().addActivity(newActivity.toMap()..['id'] = newActivity.id);
+      if (isEditing) {
+        await ApiService().updateActivity(activity.id, activity.toMap());
 
-      // Update crop activity count locally
-      final cropIndex = MockData.crops.indexWhere((c) => c.id == widget.cropId);
-      if (cropIndex != -1) {
-        final c = MockData.crops[cropIndex];
-        MockData.crops[cropIndex] = c.copyWith(activityCount: c.activityCount + 1);
-      }
-
-      // Update financial cost locally
-      if (costVal != null && costVal > 0) {
-        final finIndex = MockData.financials.indexWhere((f) => f.cropId == widget.cropId);
-        if (finIndex != -1) {
-          final f = MockData.financials[finIndex];
-          MockData.financials[finIndex] = f.copyWith(
-            inputCost: f.inputCost + costVal,
-            updatedAt: DateTime.now(),
-          );
-        } else {
-          MockData.financials.add(FinancialModel(
-            id: const Uuid().v4(),
-            cropId: widget.cropId,
-            inputCost: costVal,
-            expectedRevenue: 0,
-            actualRevenue: 0,
-            updatedAt: DateTime.now(),
-          ));
+        final oldCost = widget.existingActivity!.cost ?? 0;
+        final newCost = costVal ?? 0;
+        final costDelta = newCost - oldCost;
+        if (costDelta != 0) {
+          final finIndex = MockData.financials.indexWhere((f) => f.cropId == widget.cropId);
+          if (finIndex != -1) {
+            final f = MockData.financials[finIndex];
+            MockData.financials[finIndex] = f.copyWith(
+              inputCost: f.inputCost + costDelta,
+              updatedAt: DateTime.now(),
+            );
+          }
         }
-      }
 
-      // Append locally so UI updates instantly
-      MockData.activities.add(newActivity);
+        final activityIndex = MockData.activities.indexWhere((a) => a.id == activity.id);
+        if (activityIndex != -1) {
+          MockData.activities[activityIndex] = activity;
+        }
+      } else {
+        // Save to MongoDB backend
+        await ApiService().addActivity(activity.toMap()..['id'] = activity.id);
+
+        // Update crop activity count locally
+        final cropIndex = MockData.crops.indexWhere((c) => c.id == widget.cropId);
+        if (cropIndex != -1) {
+          final c = MockData.crops[cropIndex];
+          MockData.crops[cropIndex] = c.copyWith(activityCount: c.activityCount + 1);
+        }
+
+        // Update financial cost locally
+        if (costVal != null && costVal > 0) {
+          final finIndex = MockData.financials.indexWhere((f) => f.cropId == widget.cropId);
+          if (finIndex != -1) {
+            final f = MockData.financials[finIndex];
+            MockData.financials[finIndex] = f.copyWith(
+              inputCost: f.inputCost + costVal,
+              updatedAt: DateTime.now(),
+            );
+          } else {
+            MockData.financials.add(FinancialModel(
+              id: const Uuid().v4(),
+              cropId: widget.cropId,
+              inputCost: costVal,
+              expectedRevenue: 0,
+              actualRevenue: 0,
+              updatedAt: DateTime.now(),
+            ));
+          }
+        }
+
+        // Append locally so UI updates instantly
+        MockData.activities.add(activity);
+      }
 
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                '${_selectedCategory.emoji} ${_selectedSubtype.label} logged successfully!'),
+            content: Text(isEditing
+                ? '${_selectedCategory.emoji} ${_selectedSubtype.label} updated successfully!'
+                : '${_selectedCategory.emoji} ${_selectedSubtype.label} logged successfully!'),
             backgroundColor: AppColors.primary,
           ),
         );
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
