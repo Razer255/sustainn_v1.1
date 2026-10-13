@@ -105,6 +105,30 @@ class ApiService {
     }
   }
 
+  /// Submits a problem report to the admin dashboard.
+  Future<void> reportIssue({
+    required String userId,
+    required String userName,
+    required String userPhone,
+    required String message,
+  }) async {
+    debugPrint('[ApiService] reportIssue($userId)');
+    final response = await http.post(
+      Uri.parse('$_baseUrl/issue-reports'),
+      headers: _headers,
+      body: jsonEncode({
+        'userId': userId,
+        'userName': userName,
+        'userPhone': userPhone,
+        'message': message,
+      }),
+    ).timeout(const Duration(seconds: 15));
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to submit report.');
+    }
+  }
+
   /// Changes the user's password. Throws with a user-facing message on
   /// failure (wrong current password, validation error, network error).
   Future<void> changePassword({

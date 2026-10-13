@@ -47,14 +47,26 @@ export type AdminStats = {
   cropCount: number;
   activityCount: number;
   openActionPointCount: number;
+  openIssueReportCount: number;
 };
 
-async function fetchFromBackend<T>(path: string): Promise<T> {
+export type IssueReport = {
+  id: string;
+  userId: string;
+  userName: string;
+  userPhone: string;
+  message: string;
+  status: 'open' | 'resolved';
+  createdAt: string;
+};
+
+async function fetchFromBackend<T>(path: string, init?: RequestInit): Promise<T> {
   if (!BACKEND_URL || !ADMIN_API_KEY) {
     throw new Error('BACKEND_URL or ADMIN_API_KEY is not configured');
   }
   const res = await fetch(`${BACKEND_URL}${path}`, {
-    headers: { 'x-admin-key': ADMIN_API_KEY },
+    ...init,
+    headers: { 'x-admin-key': ADMIN_API_KEY, ...(init?.headers ?? {}) },
     cache: 'no-store',
   });
   if (!res.ok) {
@@ -67,3 +79,10 @@ export const getStats = () => fetchFromBackend<AdminStats>('/api/admin/stats');
 export const getUsers = () => fetchFromBackend<AdminUser[]>('/api/admin/users');
 export const getFields = () => fetchFromBackend<AdminField[]>('/api/admin/fields');
 export const getCrops = () => fetchFromBackend<AdminCrop[]>('/api/admin/crops');
+export const getIssueReports = () => fetchFromBackend<IssueReport[]>('/api/admin/issue-reports');
+
+export const resolveIssueReport = (id: string) =>
+  fetchFromBackend(`/api/admin/issue-reports/${id}/resolve`, { method: 'PUT' });
+
+export const deleteIssueReport = (id: string) =>
+  fetchFromBackend(`/api/admin/issue-reports/${id}`, { method: 'DELETE' });

@@ -7,6 +7,7 @@ import '../screens/dashboard/dashboard_screen.dart';
 import '../screens/dashboard/add_field_screen.dart';
 import '../screens/dashboard/personal_information_screen.dart';
 import '../screens/dashboard/change_password_screen.dart';
+import '../screens/dashboard/report_problem_screen.dart';
 import '../screens/field/field_summary_screen.dart';
 import '../screens/field/add_crop_screen.dart';
 import '../screens/crop/crop_summary_screen.dart';
@@ -23,6 +24,7 @@ class AppRouter {
   static const String addField = '/add-field';
   static const String personalInformation = '/personal-information';
   static const String changePassword = '/change-password';
+  static const String reportProblem = '/report-problem';
   static const String fieldSummary = '/field-summary';
   static const String addCrop = '/add-crop';
   static const String cropSummary = '/crop-summary';
@@ -52,6 +54,9 @@ class AppRouter {
 
       case changePassword:
         return _buildRoute(const ChangePasswordScreen(), settings);
+
+      case reportProblem:
+        return _buildRoute(const ReportProblemScreen(), settings);
 
       case fieldSummary:
         final fieldId = settings.arguments as String?;

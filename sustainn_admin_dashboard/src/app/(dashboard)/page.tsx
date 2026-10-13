@@ -9,12 +9,13 @@ export default async function OverviewPage() {
     { label: 'Crops', value: stats.cropCount },
     { label: 'Activities logged', value: stats.activityCount },
     { label: 'Open action points', value: stats.openActionPointCount },
+    { label: 'Open issue reports', value: stats.openIssueReportCount },
   ];
 
   return (
     <div>
       <h1 className="mb-6 text-2xl font-semibold text-gray-900">Overview</h1>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {cards.map((card) => (
           <div
             key={card.label}

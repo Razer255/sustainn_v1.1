@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:provider/provider.dart';
 import '../../theme/app_colors.dart';
 import '../../services/auth_service.dart';
+import '../../services/api_service.dart';
+import '../../services/mock_data.dart';
 import '../../routes/app_router.dart';
 
 class ProfileTab extends StatelessWidget {
@@ -107,8 +110,8 @@ class ProfileTab extends StatelessWidget {
                 _buildListTile(
                   icon: Icons.language,
                   title: 'Language',
-                  subtitle: 'English',
-                  onTap: () {},
+                  subtitle: context.locale.languageCode == 'hi' ? 'हिंदी' : 'English',
+                  onTap: () => _showLanguagePicker(context),
                 ),
                 _buildListTile(
                   icon: Icons.notifications_outlined,
@@ -127,7 +130,8 @@ class ProfileTab extends StatelessWidget {
                 _buildListTile(
                   icon: Icons.help_outline,
                   title: 'Help Center',
-                  onTap: () {},
+                  subtitle: 'Report a problem',
+                  onTap: () => Navigator.pushNamed(context, AppRouter.reportProblem),
                 ),
                 _buildListTile(
                   icon: Icons.info_outline,
@@ -189,6 +193,91 @@ class ProfileTab extends StatelessWidget {
           fontSize: 16,
           fontWeight: FontWeight.bold,
           color: AppColors.textPrimary,
+        ),
+      ),
+    );
+  }
+
+  void _showLanguagePicker(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Choose your language',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 16),
+                _buildLanguageOption(sheetContext, const Locale('en'), 'English', 'English'),
+                const SizedBox(height: 8),
+                _buildLanguageOption(sheetContext, const Locale('hi'), 'हिंदी', 'Hindi'),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLanguageOption(BuildContext context, Locale locale, String title, String subtitle) {
+    final isSelected = context.locale == locale;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () async {
+        await context.setLocale(locale);
+        Navigator.pop(context);
+
+        try {
+          await ApiService().updateUser(MockData.currentUser.id, {'language': locale.languageCode});
+          MockData.currentUser = MockData.currentUser.copyWith(language: locale.languageCode);
+          onProfileUpdated?.call();
+        } catch (_) {
+          // Locale already switched locally via easy_localization; syncing
+          // the preference to the backend is best-effort only.
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.border,
+            width: isSelected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          color: isSelected ? AppColors.primary.withOpacity(0.05) : Colors.transparent,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+            if (isSelected) const Icon(Icons.check_circle, color: AppColors.primary),
+          ],
         ),
       ),
     );

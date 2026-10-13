@@ -107,6 +107,17 @@ const FinancialSchema = new mongoose.Schema({
 });
 const Financial = mongoose.model('Financial', FinancialSchema);
 
+const IssueReportSchema = new mongoose.Schema({
+  _id: { type: String, required: true },
+  userId: { type: String, required: true },
+  userName: { type: String, required: true },
+  userPhone: { type: String, required: true },
+  message: { type: String, required: true, maxlength: 1000 },
+  status: { type: String, enum: ['open', 'resolved'], default: 'open' },
+  createdAt: { type: Date, default: Date.now }
+});
+const IssueReport = mongoose.model('IssueReport', IssueReportSchema);
+
 // ─── Location (States / Districts) ───────────────────────────
 // Served from a bundled static dataset instead of proxying data.gov.in's
 // LGD API, which has proven unreliable (sustained outages / unreachable
@@ -141,14 +152,22 @@ function requireAdminKey(req, res, next) {
 
 app.get('/api/admin/stats', requireAdminKey, async (req, res) => {
   try {
-    const [userCount, fieldCount, cropCount, activityCount, actionPointCount] = await Promise.all([
+    const [userCount, fieldCount, cropCount, activityCount, actionPointCount, openReportCount] = await Promise.all([
       User.countDocuments(),
       Field.countDocuments(),
       Crop.countDocuments(),
       Activity.countDocuments(),
       ActionPoint.countDocuments({ resolved: false }),
+      IssueReport.countDocuments({ status: 'open' }),
     ]);
-    res.json({ userCount, fieldCount, cropCount, activityCount, openActionPointCount: actionPointCount });
+    res.json({
+      userCount,
+      fieldCount,
+      cropCount,
+      activityCount,
+      openActionPointCount: actionPointCount,
+      openIssueReportCount: openReportCount
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -210,6 +229,52 @@ app.get('/api/admin/crops', requireAdminKey, async (req, res) => {
       healthStatus: c.healthStatus,
       activityCount: c.activityCount
     })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// List issue reports. ?status=open|resolved filters; omit for all.
+app.get('/api/admin/issue-reports', requireAdminKey, async (req, res) => {
+  try {
+    const { status } = req.query;
+    const query = status ? { status } : {};
+    const reports = await IssueReport.find(query).sort({ createdAt: -1 });
+    res.json(reports.map(r => ({
+      id: r._id,
+      userId: r.userId,
+      userName: r.userName,
+      userPhone: r.userPhone,
+      message: r.message,
+      status: r.status,
+      createdAt: r.createdAt.toISOString()
+    })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Mark an issue report resolved
+app.put('/api/admin/issue-reports/:reportId/resolve', requireAdminKey, async (req, res) => {
+  try {
+    const report = await IssueReport.findByIdAndUpdate(
+      req.params.reportId,
+      { status: 'resolved' },
+      { new: true }
+    );
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+    res.json({ id: report._id, status: report.status });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Permanently delete an issue report (manual cleanup to bound storage growth)
+app.delete('/api/admin/issue-reports/:reportId', requireAdminKey, async (req, res) => {
+  try {
+    const result = await IssueReport.findByIdAndDelete(req.params.reportId);
+    if (!result) return res.status(404).json({ error: 'Report not found' });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -591,6 +656,34 @@ app.put('/api/action-points/:apId/resolve', async (req, res) => {
       { new: true }
     );
     res.json(ap);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Submit an Issue Report (farmer-facing — no admin key required)
+app.post('/api/issue-reports', async (req, res) => {
+  try {
+    const { userId, userName, userPhone, message } = req.body;
+    console.log(`[POST] /api/issue-reports from userId: ${userId}`);
+
+    if (!userId || !userName || !userPhone || !message) {
+      return res.status(400).json({ error: 'userId, userName, userPhone, and message are required.' });
+    }
+    if (message.length > 1000) {
+      return res.status(400).json({ error: 'Message must be 1000 characters or fewer.' });
+    }
+
+    const report = new IssueReport({
+      _id: new mongoose.Types.ObjectId().toString(),
+      userId,
+      userName,
+      userPhone,
+      message: message.trim()
+    });
+    await report.save();
+
+    res.status(201).json({ id: report._id });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
