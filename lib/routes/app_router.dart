@@ -5,6 +5,8 @@ import '../screens/auth/language_selection_screen.dart';
 
 import '../screens/dashboard/dashboard_screen.dart';
 import '../screens/dashboard/add_field_screen.dart';
+import '../screens/dashboard/personal_information_screen.dart';
+import '../screens/dashboard/change_password_screen.dart';
 import '../screens/field/field_summary_screen.dart';
 import '../screens/field/add_crop_screen.dart';
 import '../screens/crop/crop_summary_screen.dart';
@@ -19,6 +21,8 @@ class AppRouter {
 
   static const String dashboard = '/dashboard';
   static const String addField = '/add-field';
+  static const String personalInformation = '/personal-information';
+  static const String changePassword = '/change-password';
   static const String fieldSummary = '/field-summary';
   static const String addCrop = '/add-crop';
   static const String cropSummary = '/crop-summary';
@@ -42,6 +46,12 @@ class AppRouter {
 
       case addField:
         return _buildRoute(const AddFieldScreen(), settings);
+
+      case personalInformation:
+        return _buildRoute(const PersonalInformationScreen(), settings);
+
+      case changePassword:
+        return _buildRoute(const ChangePasswordScreen(), settings);
 
       case fieldSummary:
         final fieldId = settings.arguments as String?;

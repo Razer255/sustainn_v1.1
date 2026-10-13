@@ -293,6 +293,55 @@ app.get('/api/users/:userId', async (req, res) => {
   }
 });
 
+// Update User Profile (name, guardianName, phone, region, language — not password)
+app.put('/api/users/:userId', async (req, res) => {
+  try {
+    const { name, guardianName, phone, region, language } = req.body;
+    console.log(`[PUT] /api/users/${req.params.userId}`);
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (name !== undefined) user.name = name;
+    if (guardianName !== undefined) user.guardianName = guardianName;
+    if (phone !== undefined) user.phone = phone;
+    if (region !== undefined) user.region = region;
+    if (language !== undefined) user.language = language;
+    await user.save();
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Change Password
+app.post('/api/users/:userId/change-password', async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    console.log(`[POST] /api/users/${req.params.userId}/change-password`);
+
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+    }
+
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const effectiveCurrentPassword = user.password || 'password123';
+    if (effectiveCurrentPassword !== currentPassword) {
+      return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+
+    user.password = newPassword;
+    await user.save();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Get Fields List
 app.get('/api/fields', async (req, res) => {
   try {

@@ -95,13 +95,40 @@ class ApiService {
         Uri.parse('$_baseUrl/users/$userId'),
         headers: _headers,
         body: jsonEncode(data),
-      );
+      ).timeout(const Duration(seconds: 45));
       if (response.statusCode != 200) {
         throw Exception('Failed to update user');
       }
     } catch (e) {
       debugPrint('Error updating user: $e');
       rethrow;
+    }
+  }
+
+  /// Changes the user's password. Throws with a user-facing message on
+  /// failure (wrong current password, validation error, network error).
+  Future<void> changePassword({
+    required String userId,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    debugPrint('[ApiService] changePassword($userId)');
+    final response = await http.post(
+      Uri.parse('$_baseUrl/users/$userId/change-password'),
+      headers: _headers,
+      body: jsonEncode({
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      }),
+    ).timeout(const Duration(seconds: 45));
+
+    if (response.statusCode != 200) {
+      String message = 'Failed to change password.';
+      try {
+        final body = jsonDecode(response.body);
+        if (body['error'] != null) message = body['error'];
+      } catch (_) {}
+      throw Exception(message);
     }
   }
 

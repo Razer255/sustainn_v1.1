@@ -286,7 +286,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onRetry: _fetchWeather,
           ),
           // ── Tab 3: Profile ──
-          ProfileTab(user: user),
+          ProfileTab(
+            user: user,
+            onProfileUpdated: () => setState(() {}),
+          ),
         ],
       ),
 

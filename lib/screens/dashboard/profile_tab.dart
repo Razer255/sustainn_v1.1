@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/user_model.dart';
 import '../../theme/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../routes/app_router.dart';
 
 class ProfileTab extends StatelessWidget {
   final dynamic user; // UserModel
+  final VoidCallback? onProfileUpdated;
 
-  const ProfileTab({super.key, required this.user});
+  const ProfileTab({super.key, required this.user, this.onProfileUpdated});
 
   @override
   Widget build(BuildContext context) {
@@ -87,13 +87,19 @@ class ProfileTab extends StatelessWidget {
                 _buildListTile(
                   icon: Icons.person_outline,
                   title: 'Personal Information',
-                  onTap: () {},
+                  onTap: () async {
+                    await Navigator.pushNamed(context, AppRouter.personalInformation);
+                    onProfileUpdated?.call();
+                  },
                 ),
                 _buildListTile(
                   icon: Icons.location_on_outlined,
                   title: 'Farm Address',
                   subtitle: (user.region as String).isNotEmpty ? user.region : 'Not provided',
-                  onTap: () {},
+                  onTap: () async {
+                    await Navigator.pushNamed(context, AppRouter.personalInformation);
+                    onProfileUpdated?.call();
+                  },
                 ),
                 
                 const SizedBox(height: 24),
@@ -112,7 +118,8 @@ class ProfileTab extends StatelessWidget {
                 _buildListTile(
                   icon: Icons.security,
                   title: 'Privacy & Security',
-                  onTap: () {},
+                  subtitle: 'Change password',
+                  onTap: () => Navigator.pushNamed(context, AppRouter.changePassword),
                 ),
 
                 const SizedBox(height: 24),
