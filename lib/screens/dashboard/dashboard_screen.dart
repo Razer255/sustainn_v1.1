@@ -121,9 +121,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                             // Profile avatar
                             GestureDetector(
-                              onTap: () {
-                                // TODO: Navigate to profile
-                              },
+                              onTap: () => setState(() => _currentNavIndex = 3),
                               child: Container(
                                 width: 44,
                                 height: 44,
