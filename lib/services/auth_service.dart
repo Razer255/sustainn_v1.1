@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'api_service.dart';
 import 'mock_data.dart';
 import '../models/user_model.dart';
@@ -23,9 +24,28 @@ class AuthService extends ChangeNotifier {
   String? get userId => _userId;
   String? get phoneNumber => _phoneNumber;
 
-  AuthService() {
-    // Optionally check if user is already authenticated via secure storage / Hive.
-    // For now, we leave it as not authenticated until login.
+  static const _sessionUserIdKey = 'session_user_id';
+  static const _sessionPhoneKey = 'session_phone';
+
+  AuthService();
+
+  /// Restores a previously saved session (if any) so the farmer isn't
+  /// bounced back to the login screen every time the app process is
+  /// killed and relaunched. Call once at startup, before the first frame.
+  Future<void> tryAutoLogin() async {
+    final prefsBox = await Hive.openBox('prefs');
+    final savedUserId = prefsBox.get(_sessionUserIdKey) as String?;
+    if (savedUserId == null) return;
+
+    _isAuthenticated = true;
+    _userId = savedUserId;
+    _phoneNumber = prefsBox.get(_sessionPhoneKey) as String?;
+
+    final profile = await _apiService.getUser(savedUserId);
+    _userProfileExists = profile != null;
+
+    await loadAppData(savedUserId);
+    notifyListeners();
   }
 
   Future<bool> login(String identifier, String password) async {
@@ -38,7 +58,11 @@ class AuthService extends ChangeNotifier {
       _isAuthenticated = true;
       _userId = result['user']['id'];
       _phoneNumber = result['user']['phone'] ?? identifier;
-      
+
+      final prefsBox = await Hive.openBox('prefs');
+      await prefsBox.put(_sessionUserIdKey, _userId);
+      await prefsBox.put(_sessionPhoneKey, _phoneNumber);
+
       // Check if user profile exists
       final profile = await _apiService.getUser(_userId!);
       _userProfileExists = profile != null;
@@ -104,8 +128,12 @@ class AuthService extends ChangeNotifier {
     _userId = null;
     _phoneNumber = null;
     _userProfileExists = false;
+
+    final prefsBox = await Hive.openBox('prefs');
+    await prefsBox.delete(_sessionUserIdKey);
+    await prefsBox.delete(_sessionPhoneKey);
+
     notifyListeners();
-    // clear tokens from storage
   }
 
   void devLogin() {

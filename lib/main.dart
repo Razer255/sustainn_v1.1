@@ -18,9 +18,14 @@ void main() async {
   // ── Hive initialization ──
   await Hive.initFlutter();
   final prefsBox = await Hive.openBox('prefs');
-  
+
   // Check flags
   final isFirstLaunch = prefsBox.get('first_launch', defaultValue: true);
+
+  // ── Restore a previously saved login session, if any, so the farmer
+  // isn't asked to log in again every time the app is relaunched. ──
+  final authService = AuthService();
+  await authService.tryAutoLogin();
 
   // ── Status bar styling ──
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -41,6 +46,7 @@ void main() async {
       fallbackLocale: const Locale('en'),
       child: SustainnApp(
         isFirstLaunch: isFirstLaunch,
+        authService: authService,
       ),
     ),
   );
@@ -48,17 +54,19 @@ void main() async {
 
 class SustainnApp extends StatelessWidget {
   final bool isFirstLaunch;
+  final AuthService authService;
 
   const SustainnApp({
     super.key,
     required this.isFirstLaunch,
+    required this.authService,
   });
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthService()),
+        ChangeNotifierProvider.value(value: authService),
       ],
       child: Consumer<AuthService>(
         builder: (context, auth, _) {
