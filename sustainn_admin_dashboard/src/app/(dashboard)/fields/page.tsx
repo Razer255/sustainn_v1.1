@@ -1,4 +1,5 @@
-import { getFields } from '@/lib/backend';
+import Link from 'next/link';
+import { getFields, getUsers } from '@/lib/backend';
 
 const healthColor: Record<string, string> = {
   good: 'bg-green-100 text-green-700',
@@ -7,7 +8,8 @@ const healthColor: Record<string, string> = {
 };
 
 export default async function FieldsPage() {
-  const fields = await getFields();
+  const [fields, users] = await Promise.all([getFields(), getUsers()]);
+  const userById = new Map(users.map((u) => [u.id, u]));
 
   return (
     <div>
@@ -17,7 +19,7 @@ export default async function FieldsPage() {
           <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
               <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Owner ID</th>
+              <th className="px-4 py-3">Owner</th>
               <th className="px-4 py-3">Area (acres)</th>
               <th className="px-4 py-3">Soil</th>
               <th className="px-4 py-3">Health</th>
@@ -27,10 +29,20 @@ export default async function FieldsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {fields.map((f) => (
+            {fields.map((f) => {
+              const owner = userById.get(f.ownerId);
+              return (
               <tr key={f.id}>
                 <td className="px-4 py-3 font-medium text-gray-900">{f.name}</td>
-                <td className="px-4 py-3 text-gray-600">{f.ownerId}</td>
+                <td className="px-4 py-3 text-gray-600">
+                  {owner ? (
+                    <Link href={`/users/${f.ownerId}`} className="text-blue-600 hover:underline">
+                      {owner.name}
+                    </Link>
+                  ) : (
+                    <span className="text-gray-400">Unknown owner</span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-gray-600">{f.area}</td>
                 <td className="px-4 py-3 text-gray-600">{f.soilType}</td>
                 <td className="px-4 py-3">
@@ -59,7 +71,8 @@ export default async function FieldsPage() {
                   )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

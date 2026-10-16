@@ -1,7 +1,9 @@
-import { getCrops } from '@/lib/backend';
+import Link from 'next/link';
+import { getCrops, getFields } from '@/lib/backend';
 
 export default async function CropsPage() {
-  const crops = await getCrops();
+  const [crops, fields] = await Promise.all([getCrops(), getFields()]);
+  const fieldById = new Map(fields.map((f) => [f.id, f]));
 
   return (
     <div>
@@ -12,7 +14,7 @@ export default async function CropsPage() {
             <tr>
               <th className="px-4 py-3">Crop</th>
               <th className="px-4 py-3">Variety</th>
-              <th className="px-4 py-3">Field ID</th>
+              <th className="px-4 py-3">Field</th>
               <th className="px-4 py-3">Season</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Sown</th>
@@ -21,11 +23,21 @@ export default async function CropsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {crops.map((c) => (
+            {crops.map((c) => {
+              const field = fieldById.get(c.fieldId);
+              return (
               <tr key={c.id}>
                 <td className="px-4 py-3 font-medium text-gray-900">{c.cropName}</td>
                 <td className="px-4 py-3 text-gray-600">{c.variety}</td>
-                <td className="px-4 py-3 text-gray-600">{c.fieldId}</td>
+                <td className="px-4 py-3 text-gray-600">
+                  {field ? (
+                    <Link href={`/users/${field.ownerId}`} className="text-blue-600 hover:underline">
+                      {field.name}
+                    </Link>
+                  ) : (
+                    <span className="text-gray-400">Unknown field</span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-gray-600">{c.season}</td>
                 <td className="px-4 py-3 text-gray-600">{c.status}</td>
                 <td className="px-4 py-3 text-gray-600">
@@ -38,7 +50,8 @@ export default async function CropsPage() {
                 </td>
                 <td className="px-4 py-3 text-gray-600">{c.activityCount}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
