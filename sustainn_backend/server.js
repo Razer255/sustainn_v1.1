@@ -239,37 +239,51 @@ app.get('/api/admin/crops', requireAdminKey, async (req, res) => {
 // filter and display without separate lookups.
 app.get('/api/admin/activities', requireAdminKey, async (req, res) => {
   try {
-    const [activities, crops, fields, users] = await Promise.all([
+    const [activities, crops, fields, users, financials] = await Promise.all([
       Activity.find().sort({ date: -1 }).limit(500),
       Crop.find(),
       Field.find(),
-      User.find()
+      User.find(),
+      Financial.find()
     ]);
 
     const cropById = new Map(crops.map(c => [c._id, c]));
     const fieldById = new Map(fields.map(f => [f._id, f]));
     const userById = new Map(users.map(u => [u._id, u]));
+    const financialByCropId = new Map(financials.map(f => [f.cropId, f]));
 
     res.json(activities.map(a => {
       const crop = cropById.get(a.cropId);
       const field = crop ? fieldById.get(crop.fieldId) : null;
       const owner = field ? userById.get(field.ownerId) : null;
+      const financial = financialByCropId.get(a.cropId);
       return {
         id: a._id,
         cropId: a.cropId,
         type: a.type,
         subtype: a.subtype,
         date: a.date.toISOString(),
+        areaCovered: a.areaCovered,
+        areaUnit: a.areaUnit,
         notes: a.notes,
         cost: a.cost,
         quantity: a.quantity,
         unit: a.unit,
         createdBy: a.createdBy,
+        attributes: a.attributes,
         cropName: crop ? crop.cropName : null,
+        cropVariety: crop ? crop.variety : null,
+        cropSeason: crop ? crop.season : null,
         fieldId: crop ? crop.fieldId : null,
         fieldName: field ? field.name : null,
+        fieldArea: field ? field.area : null,
+        fieldSoilType: field ? field.soilType : null,
         ownerId: field ? field.ownerId : null,
-        ownerName: owner ? owner.name : null
+        ownerName: owner ? owner.name : null,
+        ownerPhone: owner ? owner.phone : null,
+        cropInputCost: financial ? financial.inputCost : null,
+        cropExpectedRevenue: financial ? financial.expectedRevenue : null,
+        cropActualRevenue: financial ? financial.actualRevenue : null
       };
     }));
   } catch (err) {

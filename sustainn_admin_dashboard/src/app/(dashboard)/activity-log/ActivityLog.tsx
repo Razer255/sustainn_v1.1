@@ -23,6 +23,7 @@ export default function ActivityLog({ entries }: { entries: AdminActivityLogEntr
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [ownerFilter, setOwnerFilter] = useState<string>('all');
+  const [selected, setSelected] = useState<AdminActivityLogEntry | null>(null);
 
   const types = useMemo(() => {
     const set = new Set(entries.map((e) => e.type));
@@ -117,7 +118,8 @@ export default function ActivityLog({ entries }: { entries: AdminActivityLogEntr
                   return (
                     <div
                       key={e.id}
-                      className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                      onClick={() => setSelected(e)}
+                      className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition hover:border-gray-300 hover:shadow-md"
                     >
                       <div
                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base"
@@ -164,6 +166,161 @@ export default function ActivityLog({ entries }: { entries: AdminActivityLogEntr
           ))}
         </div>
       )}
+
+      {selected && <ActivityDetailModal entry={selected} onClose={() => setSelected(null)} />}
     </div>
   );
+}
+
+function ActivityDetailModal({
+  entry,
+  onClose,
+}: {
+  entry: AdminActivityLogEntry;
+  onClose: () => void;
+}) {
+  const meta = metaFor(entry.type);
+  const attributeEntries = entry.attributes ? Object.entries(entry.attributes) : [];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="flex items-start justify-between gap-3 rounded-t-2xl p-5"
+          style={{ backgroundColor: `${meta.color}14` }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl"
+              style={{ backgroundColor: `${meta.color}2A` }}
+            >
+              {meta.emoji}
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">{meta.label}</h2>
+              {entry.subtype && <p className="text-xs text-gray-500">{entry.subtype}</p>}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-full p-1 text-gray-400 hover:bg-black/5 hover:text-gray-700"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="space-y-5 p-5">
+          <DetailSection title="When">
+            <DetailRow
+              label="Date & time"
+              value={new Date(entry.date).toLocaleString(undefined, {
+                dateStyle: 'full',
+                timeStyle: 'short',
+              })}
+            />
+          </DetailSection>
+
+          <DetailSection title="Farmer & location">
+            <DetailRow
+              label="Farmer"
+              value={
+                entry.ownerId ? (
+                  <Link href={`/users/${entry.ownerId}`} className="text-blue-600 hover:underline">
+                    {entry.ownerName}
+                  </Link>
+                ) : (
+                  'Unknown'
+                )
+              }
+            />
+            {entry.ownerPhone && <DetailRow label="Phone" value={entry.ownerPhone} />}
+            {entry.fieldName && <DetailRow label="Field" value={entry.fieldName} />}
+            {entry.fieldArea != null && <DetailRow label="Field area" value={`${entry.fieldArea} acres`} />}
+            {entry.fieldSoilType && <DetailRow label="Soil type" value={entry.fieldSoilType} />}
+          </DetailSection>
+
+          <DetailSection title="Crop">
+            {entry.cropName && <DetailRow label="Crop" value={entry.cropName} />}
+            {entry.cropVariety && <DetailRow label="Variety" value={entry.cropVariety} />}
+            {entry.cropSeason && <DetailRow label="Season" value={entry.cropSeason} />}
+          </DetailSection>
+
+          <DetailSection title="Activity details">
+            {entry.areaCovered != null && (
+              <DetailRow label="Area covered" value={`${entry.areaCovered} ${entry.areaUnit ?? ''}`} />
+            )}
+            {entry.quantity != null && (
+              <DetailRow label="Quantity" value={`${entry.quantity.toLocaleString()} ${entry.unit ?? ''}`} />
+            )}
+            {entry.cost != null && (
+              <DetailRow label="Cost of this activity" value={`₹${entry.cost.toLocaleString()}`} />
+            )}
+            {entry.notes && <DetailRow label="Notes" value={entry.notes} />}
+            {attributeEntries.length > 0 &&
+              attributeEntries.map(([key, value]) => (
+                <DetailRow key={key} label={formatAttributeKey(key)} value={formatAttributeValue(value)} />
+              ))}
+          </DetailSection>
+
+          {(entry.cropInputCost != null ||
+            entry.cropExpectedRevenue != null ||
+            entry.cropActualRevenue != null) && (
+            <DetailSection title="Farm investment (this crop, overall)">
+              {entry.cropInputCost != null && (
+                <DetailRow label="Total input cost" value={`₹${entry.cropInputCost.toLocaleString()}`} />
+              )}
+              {entry.cropExpectedRevenue != null && (
+                <DetailRow
+                  label="Expected revenue"
+                  value={`₹${entry.cropExpectedRevenue.toLocaleString()}`}
+                />
+              )}
+              {entry.cropActualRevenue != null && (
+                <DetailRow label="Actual revenue so far" value={`₹${entry.cropActualRevenue.toLocaleString()}`} />
+              )}
+            </DetailSection>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">{title}</h3>
+      <div className="space-y-1.5 rounded-xl border border-gray-100 bg-gray-50 p-3">{children}</div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex justify-between gap-4 text-sm">
+      <span className="text-gray-500">{label}</span>
+      <span className="text-right font-medium text-gray-900">{value}</span>
+    </div>
+  );
+}
+
+function formatAttributeKey(key: string) {
+  return key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, (c) => c.toUpperCase())
+    .trim();
+}
+
+function formatAttributeValue(value: unknown): string {
+  if (value == null) return '—';
+  if (Array.isArray(value)) return value.map((v) => formatAttributeValue(v)).join(', ');
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
 }

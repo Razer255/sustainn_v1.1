@@ -62,16 +62,27 @@ export type AdminActivityLogEntry = {
   type: string;
   subtype?: string;
   date: string;
+  areaCovered?: number;
+  areaUnit?: string;
   notes?: string;
   cost?: number;
   quantity?: number;
   unit?: string;
   createdBy: string;
+  attributes?: Record<string, unknown>;
   cropName: string | null;
+  cropVariety: string | null;
+  cropSeason: string | null;
   fieldId: string | null;
   fieldName: string | null;
+  fieldArea: number | null;
+  fieldSoilType: string | null;
   ownerId: string | null;
   ownerName: string | null;
+  ownerPhone: string | null;
+  cropInputCost: number | null;
+  cropExpectedRevenue: number | null;
+  cropActualRevenue: number | null;
 };
 
 export type AdminFinancial = {
