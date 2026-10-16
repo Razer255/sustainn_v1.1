@@ -8,6 +8,7 @@ const links = [
   { href: '/users', label: 'Users' },
   { href: '/fields', label: 'Fields' },
   { href: '/crops', label: 'Crops' },
+  { href: '/activity-log', label: 'Activity Log' },
   { href: '/issues', label: 'Issue Reports' },
 ];
 

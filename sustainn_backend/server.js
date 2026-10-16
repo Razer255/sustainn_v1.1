@@ -234,6 +234,49 @@ app.get('/api/admin/crops', requireAdminKey, async (req, res) => {
   }
 });
 
+// All farming activities across every user, newest first, enriched with
+// crop/field/owner context so the admin dashboard's Activity Log can
+// filter and display without separate lookups.
+app.get('/api/admin/activities', requireAdminKey, async (req, res) => {
+  try {
+    const [activities, crops, fields, users] = await Promise.all([
+      Activity.find().sort({ date: -1 }).limit(500),
+      Crop.find(),
+      Field.find(),
+      User.find()
+    ]);
+
+    const cropById = new Map(crops.map(c => [c._id, c]));
+    const fieldById = new Map(fields.map(f => [f._id, f]));
+    const userById = new Map(users.map(u => [u._id, u]));
+
+    res.json(activities.map(a => {
+      const crop = cropById.get(a.cropId);
+      const field = crop ? fieldById.get(crop.fieldId) : null;
+      const owner = field ? userById.get(field.ownerId) : null;
+      return {
+        id: a._id,
+        cropId: a.cropId,
+        type: a.type,
+        subtype: a.subtype,
+        date: a.date.toISOString(),
+        notes: a.notes,
+        cost: a.cost,
+        quantity: a.quantity,
+        unit: a.unit,
+        createdBy: a.createdBy,
+        cropName: crop ? crop.cropName : null,
+        fieldId: crop ? crop.fieldId : null,
+        fieldName: field ? field.name : null,
+        ownerId: field ? field.ownerId : null,
+        ownerName: owner ? owner.name : null
+      };
+    }));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Full drill-down for one user: their fields, each field's crops, each
 // crop's activities and financials. One aggregated call so the admin
 // dashboard doesn't need to fan out N+1 requests.
