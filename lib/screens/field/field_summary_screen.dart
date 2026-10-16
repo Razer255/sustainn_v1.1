@@ -39,7 +39,7 @@ class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
       0.0,
       (sum, crop) => sum + MockData.getTotalInputCostForCrop(crop.id),
     );
-    final areaUsed = MockData.getNonIntercropAreaForField(widget.fieldId);
+    final areaUsed = MockData.getOccupiedAreaForField(widget.fieldId);
 
     return Scaffold(
       body: CustomScrollView(

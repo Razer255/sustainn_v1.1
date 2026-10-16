@@ -319,13 +319,22 @@ class MockData {
     return crops.where((c) => c.fieldId == fieldId).toList();
   }
 
-  /// Sum of `areaCovered` for the field's non-intercrop crops — intercrop
-  /// crops share land with the field's main crop rather than consuming
-  /// additional area, so they're excluded from this capacity total.
-  static double getNonIntercropAreaForField(String fieldId) {
-    return getCropsForField(fieldId)
+  /// Total land actually occupied on the field right now.
+  ///
+  /// Non-intercrop crops consume land exclusively, so their areas add up.
+  /// Intercrop crops share the *same* patch of land simultaneously (e.g.
+  /// maize + beans grown together), so they don't stack with each other —
+  /// only the single largest intercrop area counts toward occupied land.
+  /// Formula: sum(non-intercrop areas) + max(intercrop areas).
+  static double getOccupiedAreaForField(String fieldId) {
+    final cropsForField = getCropsForField(fieldId);
+    final nonIntercropSum = cropsForField
         .where((c) => !c.isIntercrop)
         .fold<double>(0, (sum, c) => sum + c.areaCovered);
+    final maxIntercrop = cropsForField
+        .where((c) => c.isIntercrop)
+        .fold<double>(0, (max, c) => c.areaCovered > max ? c.areaCovered : max);
+    return nonIntercropSum + maxIntercrop;
   }
 
   static List<ActivityModel> getActivitiesForCrop(String cropId) {

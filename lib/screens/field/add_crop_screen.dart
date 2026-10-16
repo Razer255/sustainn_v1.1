@@ -305,16 +305,38 @@ class _AddCropScreenState extends State<AddCropScreen> {
     );
   }
 
-  /// Live "X of Y acres available" hint under the area field. Intercrop
-  /// crops share land with the field's main crop, so they never count
-  /// toward this and never show a warning here.
+  /// Occupied area on the field if this new crop were added, given the
+  /// occupancy rule: sum(non-intercrop areas) + max(intercrop areas).
+  /// A new non-intercrop crop always adds on top. A new intercrop crop
+  /// only raises the total if it's larger than any existing intercrop
+  /// crop on the field (since intercrops share the same patch of land).
+  double _projectedOccupiedArea(double newArea) {
+    final cropsForField = MockData.getCropsForField(widget.fieldId);
+    final nonIntercropSum = cropsForField
+        .where((c) => !c.isIntercrop)
+        .fold<double>(0, (sum, c) => sum + c.areaCovered);
+    final existingMaxIntercrop = cropsForField
+        .where((c) => c.isIntercrop)
+        .fold<double>(0, (max, c) => c.areaCovered > max ? c.areaCovered : max);
+
+    if (_isIntercrop) {
+      final maxIntercrop = newArea > existingMaxIntercrop ? newArea : existingMaxIntercrop;
+      return nonIntercropSum + maxIntercrop;
+    }
+    return nonIntercropSum + newArea + existingMaxIntercrop;
+  }
+
+  /// Live "X of Y acres available" hint under the area field, accounting
+  /// for the field's current occupancy: sum(non-intercrop areas) +
+  /// max(intercrop areas) — since intercrop crops share the same patch
+  /// of land simultaneously rather than each claiming their own.
   Widget _buildCapacityHelperText() {
     final field = MockData.fields.firstWhere((f) => f.id == widget.fieldId);
-    final used = MockData.getNonIntercropAreaForField(widget.fieldId);
-    final available = field.area - used;
+    final occupied = MockData.getOccupiedAreaForField(widget.fieldId);
+    final available = field.area - occupied;
     final entered = double.tryParse(_areaController.text) ?? 0;
 
-    final wouldOverflow = !_isIntercrop && entered > available;
+    final wouldOverflow = _projectedOccupiedArea(entered) > field.area;
 
     return Text(
       wouldOverflow
@@ -370,18 +392,18 @@ class _AddCropScreenState extends State<AddCropScreen> {
     final area = double.parse(_areaController.text);
     final field = MockData.fields.firstWhere((f) => f.id == widget.fieldId);
 
-    // Warn but allow — intercrop area shares land and is excluded entirely.
-    if (!_isIntercrop) {
-      final used = MockData.getNonIntercropAreaForField(widget.fieldId);
-      final available = field.area - used;
-      if (area > available) {
-        final proceed = await _confirmOverAllocation(
-          fieldName: field.name,
-          available: available,
-          fieldArea: field.area,
-        );
-        if (proceed != true) return;
-      }
+    // Warn but allow — occupancy rule: sum(non-intercrop areas) +
+    // max(intercrop areas), since intercrop crops share the same patch
+    // of land simultaneously rather than each claiming their own.
+    final projectedOccupied = _projectedOccupiedArea(area);
+    if (projectedOccupied > field.area) {
+      final available = field.area - MockData.getOccupiedAreaForField(widget.fieldId);
+      final proceed = await _confirmOverAllocation(
+        fieldName: field.name,
+        available: available,
+        fieldArea: field.area,
+      );
+      if (proceed != true) return;
     }
 
     setState(() => _isLoading = true);
