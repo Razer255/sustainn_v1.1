@@ -599,6 +599,55 @@ app.post('/api/fields', async (req, res) => {
   }
 });
 
+// Update Field
+app.put('/api/fields/:fieldId', async (req, res) => {
+  try {
+    const { name, area, latitude, longitude, boundaryPoints, soilType } = req.body;
+    console.log(`[PUT] /api/fields/${req.params.fieldId}`);
+
+    const field = await Field.findById(req.params.fieldId);
+    if (!field) {
+      return res.status(404).json({ error: 'Field not found' });
+    }
+
+    if (name !== undefined) field.name = name;
+    if (area !== undefined) field.area = area;
+    if (latitude !== undefined) field.latitude = latitude;
+    if (longitude !== undefined) field.longitude = longitude;
+    if (boundaryPoints !== undefined) field.boundaryPoints = boundaryPoints;
+    if (soilType !== undefined) field.soilType = soilType;
+    await field.save();
+
+    res.json({ id: field._id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete Field — refused if any crop still references it, to avoid
+// orphaning crop/activity/financial records.
+app.delete('/api/fields/:fieldId', async (req, res) => {
+  try {
+    console.log(`[DELETE] /api/fields/${req.params.fieldId}`);
+
+    const cropCount = await Crop.countDocuments({ fieldId: req.params.fieldId });
+    if (cropCount > 0) {
+      return res.status(409).json({
+        error: `This field still has ${cropCount} crop(s) on it. Remove them before deleting the field.`
+      });
+    }
+
+    const result = await Field.findByIdAndDelete(req.params.fieldId);
+    if (!result) {
+      return res.status(404).json({ error: 'Field not found' });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Get Crops List
 app.get('/api/crops', async (req, res) => {
   try {

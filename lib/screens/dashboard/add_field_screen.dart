@@ -11,8 +11,15 @@ import 'mark_field_boundary_screen.dart';
 
 /// Add Field screen — form to create a new agricultural field.
 /// Collects: name, area, GPS location, soil type.
+///
+/// When [existingField] is set, the screen edits that field in place
+/// instead of creating a new one.
 class AddFieldScreen extends StatefulWidget {
-  const AddFieldScreen({super.key});
+  final FieldModel? existingField;
+
+  const AddFieldScreen({super.key, this.existingField});
+
+  bool get isEditing => existingField != null;
 
   @override
   State<AddFieldScreen> createState() => _AddFieldScreenState();
@@ -43,6 +50,20 @@ class _AddFieldScreenState extends State<AddFieldScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    final existing = widget.existingField;
+    if (existing != null) {
+      _nameController.text = existing.name;
+      _areaController.text = existing.area.toString();
+      _selectedSoilType = existing.soilType;
+      _latitude = existing.latitude;
+      _longitude = existing.longitude;
+      _boundaryPoints = existing.boundaryPoints;
+    }
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _areaController.dispose();
@@ -53,7 +74,7 @@ class _AddFieldScreenState extends State<AddFieldScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add New Field'),
+        title: Text(widget.isEditing ? 'Edit Field' : 'Add New Field'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -73,15 +94,17 @@ class _AddFieldScreenState extends State<AddFieldScreen> {
                   color: AppColors.primaryLight,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.info_outline,
+                    const Icon(Icons.info_outline,
                         color: AppColors.primaryDark, size: 20),
-                    SizedBox(width: 10),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Add your field details to start tracking crops and activities.',
-                        style: TextStyle(
+                        widget.isEditing
+                            ? 'Update your field details below.'
+                            : 'Add your field details to start tracking crops and activities.',
+                        style: const TextStyle(
                           fontSize: 13,
                           color: AppColors.primaryDark,
                         ),
@@ -297,7 +320,9 @@ class _AddFieldScreenState extends State<AddFieldScreen> {
                           ),
                         )
                       : const Icon(Icons.check),
-                  label: Text(_isLoading ? 'Saving...' : 'Save Field'),
+                  label: Text(_isLoading
+                      ? 'Saving...'
+                      : (widget.isEditing ? 'Update Field' : 'Save Field')),
                 ),
               ),
 
@@ -350,39 +375,81 @@ class _AddFieldScreenState extends State<AddFieldScreen> {
       return;
     }
 
+    final isEditing = widget.isEditing;
+    final newArea = double.parse(_areaController.text);
+
+    if (isEditing) {
+      final occupied = MockData.getOccupiedAreaForField(widget.existingField!.id);
+      if (newArea < occupied) {
+        final proceed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Area smaller than crops in use'),
+            content: Text(
+              'This field currently has ${occupied.toStringAsFixed(1)} acres occupied by '
+              'crops, which is more than the ${newArea.toStringAsFixed(1)} acres you\'re '
+              'setting. Save anyway?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Save Anyway'),
+              ),
+            ],
+          ),
+        );
+        if (proceed != true) return;
+      }
+    }
+
     setState(() => _isLoading = true);
 
-    final newField = FieldModel(
-      id: const Uuid().v4(),
-      ownerId: MockData.currentUser.id,
+    final field = FieldModel(
+      id: isEditing ? widget.existingField!.id : const Uuid().v4(),
+      ownerId: isEditing ? widget.existingField!.ownerId : MockData.currentUser.id,
       name: _nameController.text.trim(),
-      area: double.parse(_areaController.text),
+      area: newArea,
       latitude: _latitude,
       longitude: _longitude,
       boundaryPoints: _boundaryPoints,
       soilType: _selectedSoilType,
-      createdAt: DateTime.now(),
-      healthStatus: 'good',
-      activeCrops: 0,
-      pendingActions: 0,
+      createdAt: isEditing ? widget.existingField!.createdAt : DateTime.now(),
+      healthStatus: isEditing ? widget.existingField!.healthStatus : 'good',
+      activeCrops: isEditing ? widget.existingField!.activeCrops : 0,
+      pendingActions: isEditing ? widget.existingField!.pendingActions : 0,
     );
 
     try {
-      // Save to MongoDB backend
-      await ApiService().addField(newField.toMap()..['id'] = newField.id);
-      
-      // Append locally so UI updates instantly
-      MockData.fields.add(newField);
+      if (isEditing) {
+        await ApiService().updateField(field.id, field.toMap());
+
+        final index = MockData.fields.indexWhere((f) => f.id == field.id);
+        if (index != -1) {
+          MockData.fields[index] = field;
+        }
+      } else {
+        // Save to MongoDB backend
+        await ApiService().addField(field.toMap()..['id'] = field.id);
+
+        // Append locally so UI updates instantly
+        MockData.fields.add(field);
+      }
 
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Field added successfully! 🌾'),
+          SnackBar(
+            content: Text(isEditing
+                ? 'Field updated successfully! 🌾'
+                : 'Field added successfully! 🌾'),
             backgroundColor: AppColors.primary,
           ),
         );
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {

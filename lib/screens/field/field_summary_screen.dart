@@ -5,6 +5,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/action_point_tile.dart';
 import '../../widgets/status_chip.dart';
 import '../../widgets/summary_card.dart';
+import '../dashboard/add_field_screen.dart';
 
 /// Field Summary screen — displays details of a single field.
 /// Shows: season selector, crops list, field summary, and field-level action points.
@@ -26,6 +27,15 @@ class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
     'Kharif 2025',
     'Rabi 2024-25',
   ];
+
+  Future<void> _editField() async {
+    final field = MockData.fields.firstWhere((f) => f.id == widget.fieldId);
+    final updated = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => AddFieldScreen(existingField: field)),
+    );
+    if (updated == true && mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +63,13 @@ class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
               icon: const Icon(Icons.arrow_back, color: Colors.white),
               onPressed: () => Navigator.pop(context),
             ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, color: Colors.white),
+                tooltip: 'Edit field',
+                onPressed: _editField,
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: const BoxDecoration(

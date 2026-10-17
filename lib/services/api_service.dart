@@ -203,7 +203,7 @@ class ApiService {
         Uri.parse('$_baseUrl/fields/$fieldId'),
         headers: _headers,
         body: jsonEncode(data),
-      );
+      ).timeout(const Duration(seconds: 45));
       if (response.statusCode != 200) {
         throw Exception('Failed to update field');
       }
@@ -215,17 +215,17 @@ class ApiService {
 
   Future<void> deleteField(String fieldId) async {
     debugPrint('[ApiService] deleteField($fieldId)');
-    try {
-      final response = await http.delete(
-        Uri.parse('$_baseUrl/fields/$fieldId'),
-        headers: _headers,
-      );
-      if (response.statusCode != 200) {
-        throw Exception('Failed to delete field');
-      }
-    } catch (e) {
-      debugPrint('Error deleting field: $e');
-      rethrow;
+    final response = await http.delete(
+      Uri.parse('$_baseUrl/fields/$fieldId'),
+      headers: _headers,
+    ).timeout(const Duration(seconds: 45));
+    if (response.statusCode != 200) {
+      String message = 'Failed to delete field.';
+      try {
+        final body = jsonDecode(response.body);
+        if (body['error'] != null) message = body['error'];
+      } catch (_) {}
+      throw Exception(message);
     }
   }
 
