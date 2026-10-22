@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/action_point_model.dart';
 import '../../models/crop_model.dart';
+import '../../services/api_service.dart';
 import '../../services/mock_data.dart';
 import '../../services/weather_service.dart';
 import '../../theme/app_colors.dart';
@@ -63,6 +64,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _weatherLoading = false;
       _weatherError = forecast == null;
     });
+  }
+
+  Future<void> _resolveActionPoint(ActionPointModel actionPoint) async {
+    try {
+      await ApiService().resolveActionPoint(actionPoint.id);
+      MockData.actionPoints.removeWhere((ap) => ap.id == actionPoint.id);
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Action point resolved ✓'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not resolve: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Future<bool> _confirmExit() async {
@@ -295,15 +318,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   ...actionPoints.map((ap) => ActionPointTile(
                         actionPoint: ap,
-                        onResolve: () {
-                          // TODO: resolve action point
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Action point resolved ✓'),
-                              backgroundColor: AppColors.primary,
-                            ),
-                          );
-                        },
+                        onResolve: () => _resolveActionPoint(ap),
                       )),
 
                   const SizedBox(height: 100),

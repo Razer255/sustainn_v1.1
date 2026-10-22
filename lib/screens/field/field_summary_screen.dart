@@ -22,6 +22,28 @@ class FieldSummaryScreen extends StatefulWidget {
 class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
   String _selectedSeason = 'Kharif 2026';
 
+  Future<void> _resolveActionPoint(dynamic actionPoint) async {
+    try {
+      await ApiService().resolveActionPoint(actionPoint.id);
+      MockData.actionPoints.removeWhere((ap) => ap.id == actionPoint.id);
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Action point resolved ✓'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not resolve: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Future<void> _editField() async {
     final field = MockData.fields.firstWhere((f) => f.id == widget.fieldId);
     final updated = await Navigator.push<bool>(
@@ -361,7 +383,7 @@ class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
                     const SizedBox(height: 12),
                     ...actionPoints.map((ap) => ActionPointTile(
                           actionPoint: ap,
-                          onResolve: () {},
+                          onResolve: () => _resolveActionPoint(ap),
                         )),
                   ],
 

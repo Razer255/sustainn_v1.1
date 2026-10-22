@@ -25,6 +25,28 @@ class CropSummaryScreen extends StatefulWidget {
 class _CropSummaryScreenState extends State<CropSummaryScreen> {
   String get cropId => widget.cropId;
 
+  Future<void> _resolveActionPoint(dynamic actionPoint) async {
+    try {
+      await ApiService().resolveActionPoint(actionPoint.id);
+      MockData.actionPoints.removeWhere((ap) => ap.id == actionPoint.id);
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Action point resolved ✓'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not resolve: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Future<void> _editCrop() async {
     final crop = MockData.crops.firstWhere((c) => c.id == cropId);
     final updated = await Navigator.push<bool>(
@@ -371,7 +393,7 @@ class _CropSummaryScreenState extends State<CropSummaryScreen> {
                     const SizedBox(height: 12),
                     ...actionPoints.map((ap) => ActionPointTile(
                           actionPoint: ap,
-                          onResolve: () {},
+                          onResolve: () => _resolveActionPoint(ap),
                         )),
                   ],
 

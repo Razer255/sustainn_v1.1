@@ -93,7 +93,7 @@ export default function NewActionPointForm({ users }: { users: AdminUser[] }) {
           value={userId}
           onChange={(e) => onUserChange(e.target.value)}
           required
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
         >
           <option value="">Select a farmer…</option>
           {users.map((u) => (
@@ -132,7 +132,7 @@ export default function NewActionPointForm({ users }: { users: AdminUser[] }) {
             onChange={(e) => setRefId(e.target.value)}
             required
             disabled={!userId || loadingDetail}
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none disabled:opacity-50"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:opacity-50"
           >
             <option value="">
               {loadingDetail ? 'Loading…' : !userId ? 'Select a farmer first' : 'Select a field…'}
@@ -154,7 +154,7 @@ export default function NewActionPointForm({ users }: { users: AdminUser[] }) {
             onChange={(e) => setRefId(e.target.value)}
             required
             disabled={!userId || loadingDetail}
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none disabled:opacity-50"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none disabled:opacity-50"
           >
             <option value="">
               {loadingDetail ? 'Loading…' : !userId ? 'Select a farmer first' : 'Select a crop…'}
@@ -179,7 +179,7 @@ export default function NewActionPointForm({ users }: { users: AdminUser[] }) {
           required
           rows={3}
           placeholder="e.g. Apply second dose of Urea fertilizer — optimal window in 3 days"
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
         />
       </div>
 
@@ -189,7 +189,7 @@ export default function NewActionPointForm({ users }: { users: AdminUser[] }) {
           <select
             value={priority}
             onChange={(e) => setPriority(e.target.value as 'high' | 'medium' | 'low')}
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
           >
             <option value="high">High</option>
             <option value="medium">Medium</option>
@@ -202,7 +202,7 @@ export default function NewActionPointForm({ users }: { users: AdminUser[] }) {
             type="date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
           />
         </div>
       </div>
@@ -214,7 +214,7 @@ export default function NewActionPointForm({ users }: { users: AdminUser[] }) {
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           placeholder="e.g. fertilizer, weather, pest, soil"
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
         />
       </div>
 
