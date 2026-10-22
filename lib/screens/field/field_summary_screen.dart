@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/action_point_model.dart';
+import '../../services/api_service.dart';
 import '../../services/mock_data.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/action_point_tile.dart';
@@ -37,6 +38,48 @@ class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
     if (updated == true && mounted) setState(() {});
   }
 
+  Future<void> _deleteField() async {
+    final field = MockData.fields.firstWhere((f) => f.id == widget.fieldId);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete field?'),
+        content: Text(
+          'This will permanently delete "${field.name}". This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ApiService().deleteField(field.id);
+      MockData.fields.removeWhere((f) => f.id == field.id);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Field deleted'), backgroundColor: AppColors.primary),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete field: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final field = MockData.fields.firstWhere((f) => f.id == widget.fieldId);
@@ -68,6 +111,11 @@ class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
                 icon: const Icon(Icons.edit_outlined, color: Colors.white),
                 tooltip: 'Edit field',
                 onPressed: _editField,
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.white),
+                tooltip: 'Delete field',
+                onPressed: _deleteField,
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(

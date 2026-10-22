@@ -286,6 +286,22 @@ class ApiService {
     }
   }
 
+  Future<void> deleteCrop(String cropId) async {
+    debugPrint('[ApiService] deleteCrop($cropId)');
+    final response = await http.delete(
+      Uri.parse('$_baseUrl/crops/$cropId'),
+      headers: _headers,
+    ).timeout(const Duration(seconds: 45));
+    if (response.statusCode != 200) {
+      String message = 'Failed to delete crop.';
+      try {
+        final body = jsonDecode(response.body);
+        if (body['error'] != null) message = body['error'];
+      } catch (_) {}
+      throw Exception(message);
+    }
+  }
+
   // ─── Activities ─────────────────────────────────────────────
 
   Stream<List<Map<String, dynamic>>> getActivitiesStream(String cropId) async* {

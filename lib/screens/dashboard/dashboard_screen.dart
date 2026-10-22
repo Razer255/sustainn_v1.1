@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../models/action_point_model.dart';
 import '../../models/crop_model.dart';
 import '../../services/mock_data.dart';
@@ -64,13 +65,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  Future<bool> _confirmExit() async {
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Exit Sustainn?'),
+        content: const Text('Are you sure you want to close the app?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Exit'),
+          ),
+        ],
+      ),
+    );
+    return shouldExit ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = MockData.currentUser;
     final fields = MockData.fields;
     final actionPoints = MockData.getAllUnresolvedActionPoints();
 
-    return Scaffold(
+    return PopScope(
+      // Dashboard is the root screen once logged in — there's nothing
+      // above it on the Navigator stack. Without this, Android's back
+      // button falls through to an unregistered '/' route and shows
+      // "Route not found: /" instead of backing out of a tab or exiting.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (_currentNavIndex != 0) {
+          setState(() => _currentNavIndex = 0);
+          return;
+        }
+        final shouldExit = await _confirmExit();
+        if (shouldExit && mounted) {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
       body: IndexedStack(
         index: _currentNavIndex,
         children: [
@@ -335,6 +374,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             label: 'Profile',
           ),
         ],
+      ),
       ),
     );
   }

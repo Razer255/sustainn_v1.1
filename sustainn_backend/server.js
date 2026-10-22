@@ -768,6 +768,35 @@ app.put('/api/crops/:cropId', async (req, res) => {
   }
 });
 
+// Delete Crop — refused if it has any logged activities, so a farmer
+// can't accidentally lose activity history without realizing it.
+app.delete('/api/crops/:cropId', async (req, res) => {
+  try {
+    console.log(`[DELETE] /api/crops/${req.params.cropId}`);
+
+    const crop = await Crop.findById(req.params.cropId);
+    if (!crop) {
+      return res.status(404).json({ error: 'Crop not found' });
+    }
+
+    const activityCount = await Activity.countDocuments({ cropId: req.params.cropId });
+    if (activityCount > 0) {
+      const noun = activityCount === 1 ? 'activity' : 'activities';
+      return res.status(409).json({
+        error: `This crop has ${activityCount} logged ${noun}. Remove them before deleting the crop.`
+      });
+    }
+
+    await Crop.findByIdAndDelete(req.params.cropId);
+    await Financial.findOneAndDelete({ cropId: req.params.cropId });
+    await Field.findByIdAndUpdate(crop.fieldId, { $inc: { activeCrops: -1 } });
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Get Activities
 app.get('/api/activities', async (req, res) => {
   try {

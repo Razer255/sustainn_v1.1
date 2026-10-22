@@ -36,6 +36,56 @@ class _CropSummaryScreenState extends State<CropSummaryScreen> {
     if (updated == true && mounted) setState(() {});
   }
 
+  Future<void> _deleteCrop() async {
+    final crop = MockData.crops.firstWhere((c) => c.id == cropId);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete crop?'),
+        content: Text(
+          'This will permanently delete "${crop.cropName}" (${crop.variety}). '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ApiService().deleteCrop(crop.id);
+      MockData.crops.removeWhere((c) => c.id == crop.id);
+
+      final fieldIndex = MockData.fields.indexWhere((f) => f.id == crop.fieldId);
+      if (fieldIndex != -1) {
+        final f = MockData.fields[fieldIndex];
+        MockData.fields[fieldIndex] =
+            f.copyWith(activeCrops: (f.activeCrops - 1).clamp(0, 1 << 30));
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Crop deleted'), backgroundColor: AppColors.primary),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete crop: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Future<void> _editActivity(ActivityModel activity) async {
     final updated = await Navigator.push<bool>(
       context,
@@ -133,6 +183,11 @@ class _CropSummaryScreenState extends State<CropSummaryScreen> {
                 icon: const Icon(Icons.edit_outlined, color: Colors.white),
                 tooltip: 'Edit crop',
                 onPressed: _editCrop,
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.white),
+                tooltip: 'Delete crop',
+                onPressed: _deleteCrop,
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
