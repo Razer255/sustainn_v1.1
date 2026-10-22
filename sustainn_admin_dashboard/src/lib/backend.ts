@@ -167,3 +167,22 @@ export const createActionPoint = (data: NewActionPoint) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
+
+export type AdminActionPoint = {
+  id: string;
+  scope: 'farmer' | 'field' | 'crop';
+  refId: string;
+  message: string;
+  priority: string;
+  dueDate: string | null;
+  category?: string;
+  resolved: boolean;
+  createdAt: string;
+  ownerId: string | null;
+  ownerName: string | null;
+  fieldName: string | null;
+  cropName: string | null;
+};
+
+export const getActionPoints = () =>
+  fetchFromBackend<AdminActionPoint[]>('/api/admin/action-points');

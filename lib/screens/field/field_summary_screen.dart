@@ -22,13 +22,6 @@ class FieldSummaryScreen extends StatefulWidget {
 class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
   String _selectedSeason = 'Kharif 2026';
 
-  final _seasons = [
-    'Kharif 2026',
-    'Rabi 2025-26',
-    'Kharif 2025',
-    'Rabi 2024-25',
-  ];
-
   Future<void> _editField() async {
     final field = MockData.fields.firstWhere((f) => f.id == widget.fieldId);
     final updated = await Navigator.push<bool>(
@@ -92,16 +85,30 @@ class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final field = MockData.fields[fieldIndex];
-    final crops = MockData.getCropsForField(widget.fieldId);
-    final actionPoints = MockData.getActionPointsForScope(
-      ActionScope.field,
-      widget.fieldId,
-    );
-    final totalCost = crops.fold<double>(
+
+    // Field-wide totals (acres used, total cost) always reflect every
+    // crop ever grown here, regardless of the season filter below —
+    // the farmer wants to see whole-field usage, not just one season's.
+    final allCrops = MockData.getCropsForField(widget.fieldId);
+    final totalCost = allCrops.fold<double>(
       0.0,
       (sum, crop) => sum + MockData.getTotalInputCostForCrop(crop.id),
     );
     final areaUsed = MockData.getOccupiedAreaForField(widget.fieldId);
+
+    // The season dropdown only offers seasons that actually have crops on
+    // this field (plus the default, so it's never empty for a brand-new
+    // field). The crops list itself is filtered to the selected season —
+    // picking a season with no crops correctly shows an empty state.
+    final seasons = {'Kharif 2026', ...allCrops.map((c) => c.season)}.toList()
+      ..sort();
+    final selectedSeason = seasons.contains(_selectedSeason) ? _selectedSeason : seasons.first;
+    final crops = allCrops.where((c) => c.season == selectedSeason).toList();
+
+    final actionPoints = MockData.getActionPointsForScope(
+      ActionScope.field,
+      widget.fieldId,
+    );
 
     return Scaffold(
       body: CustomScrollView(
@@ -214,10 +221,10 @@ class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
-                        value: _selectedSeason,
+                        value: selectedSeason,
                         isExpanded: true,
                         icon: const Icon(Icons.keyboard_arrow_down),
-                        items: _seasons
+                        items: seasons
                             .map((s) => DropdownMenuItem(
                                   value: s,
                                   child: Row(
@@ -235,7 +242,7 @@ class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
                                 ))
                             .toList(),
                         onChanged: (v) => setState(
-                            () => _selectedSeason = v ?? _selectedSeason),
+                            () => _selectedSeason = v ?? selectedSeason),
                       ),
                     ),
                   ),
@@ -314,21 +321,23 @@ class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
                         color: AppColors.surfaceVariant,
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: const Column(
+                      child: Column(
                         children: [
-                          Icon(Icons.grass, size: 48, color: AppColors.primary),
-                          SizedBox(height: 12),
+                          const Icon(Icons.grass, size: 48, color: AppColors.primary),
+                          const SizedBox(height: 12),
                           Text(
-                            'No crops yet',
-                            style: TextStyle(
+                            allCrops.isEmpty ? 'No crops yet' : 'No crops in $selectedSeason',
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          SizedBox(height: 4),
+                          const SizedBox(height: 4),
                           Text(
-                            'Add your first crop to start tracking',
-                            style: TextStyle(
+                            allCrops.isEmpty
+                                ? 'Add your first crop to start tracking'
+                                : 'This field had no crops during this season',
+                            style: const TextStyle(
                               fontSize: 13,
                               color: AppColors.textSecondary,
                             ),

@@ -546,6 +546,73 @@ app.post('/api/admin/action-points', requireAdminKey, async (req, res) => {
   }
 });
 
+// List all action points (resolved and unresolved), enriched with the
+// farmer/field/crop they point at, so the admin dashboard can show what's
+// been sent and what the farmer has marked resolved.
+app.get('/api/admin/action-points', requireAdminKey, async (req, res) => {
+  try {
+    const [actionPoints, users, fields, crops] = await Promise.all([
+      ActionPoint.find().sort({ createdAt: -1 }),
+      User.find(),
+      Field.find(),
+      Crop.find()
+    ]);
+
+    const userById = new Map(users.map(u => [u._id, u]));
+    const fieldById = new Map(fields.map(f => [f._id, f]));
+    const cropById = new Map(crops.map(c => [c._id, c]));
+
+    res.json(actionPoints.map(ap => {
+      let ownerId = null;
+      let ownerName = null;
+      let fieldName = null;
+      let cropName = null;
+
+      if (ap.scope === 'farmer') {
+        const user = userById.get(ap.refId);
+        ownerId = ap.refId;
+        ownerName = user ? user.name : null;
+      } else if (ap.scope === 'field') {
+        const field = fieldById.get(ap.refId);
+        if (field) {
+          ownerId = field.ownerId;
+          ownerName = userById.get(field.ownerId)?.name ?? null;
+          fieldName = field.name;
+        }
+      } else if (ap.scope === 'crop') {
+        const crop = cropById.get(ap.refId);
+        if (crop) {
+          cropName = crop.cropName;
+          const field = fieldById.get(crop.fieldId);
+          if (field) {
+            ownerId = field.ownerId;
+            ownerName = userById.get(field.ownerId)?.name ?? null;
+            fieldName = field.name;
+          }
+        }
+      }
+
+      return {
+        id: ap._id,
+        scope: ap.scope,
+        refId: ap.refId,
+        message: ap.message,
+        priority: ap.priority,
+        dueDate: ap.dueDate ? ap.dueDate.toISOString() : null,
+        category: ap.category,
+        resolved: ap.resolved,
+        createdAt: ap.createdAt.toISOString(),
+        ownerId,
+        ownerName,
+        fieldName,
+        cropName
+      };
+    }));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── REST API Routes ──────────────────────────────────────────
 
 // A stored password is either a bcrypt hash (always starts with $2) or a

@@ -121,10 +121,29 @@ class AuthService extends ChangeNotifier {
         MockData.activities.addAll(actList.map((m) => ActivityModel.fromMap(m, m['id'] ?? m['_id'])));
       }
 
-      // 5. Action Points
-      final apList = await _apiService.getActionPointsStream(scope: 'farmer', refId: userId).first;
+      // 5. Action Points — farmer-level, plus field-level and crop-level
+      // for every field/crop the farmer owns. Previously only farmer-level
+      // ones were fetched, so field/crop action points (e.g. created from
+      // the admin dashboard) never reached the app.
       MockData.actionPoints.clear();
-      MockData.actionPoints.addAll(apList.map((m) => ActionPointModel.fromMap(m, m['id'] ?? m['_id'])));
+      final farmerApList =
+          await _apiService.getActionPointsStream(scope: 'farmer', refId: userId).first;
+      MockData.actionPoints
+          .addAll(farmerApList.map((m) => ActionPointModel.fromMap(m, m['id'] ?? m['_id'])));
+
+      for (final f in MockData.fields) {
+        final fieldApList =
+            await _apiService.getActionPointsStream(scope: 'field', refId: f.id).first;
+        MockData.actionPoints
+            .addAll(fieldApList.map((m) => ActionPointModel.fromMap(m, m['id'] ?? m['_id'])));
+      }
+
+      for (final c in MockData.crops) {
+        final cropApList =
+            await _apiService.getActionPointsStream(scope: 'crop', refId: c.id).first;
+        MockData.actionPoints
+            .addAll(cropApList.map((m) => ActionPointModel.fromMap(m, m['id'] ?? m['_id'])));
+      }
 
       // 6. Financials
       MockData.financials.clear();
