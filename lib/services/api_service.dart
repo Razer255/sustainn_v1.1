@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -451,17 +452,23 @@ class ApiService {
 
   Future<void> resolveActionPoint(String actionPointId) async {
     debugPrint('[ApiService] resolveActionPoint($actionPointId)');
+    http.Response response;
     try {
-      final response = await http.put(
+      response = await http.put(
         Uri.parse('$_baseUrl/action-points/$actionPointId/resolve'),
         headers: _headers,
-      );
-      if (response.statusCode != 200) {
-        throw Exception('Failed to resolve action point');
-      }
-    } catch (e) {
-      debugPrint('Error resolving action point: $e');
-      rethrow;
+      ).timeout(const Duration(seconds: 45));
+    } on TimeoutException {
+      throw Exception('Request timed out — server may be waking up, please try again.');
+    }
+    debugPrint('[ApiService] resolveActionPoint response: ${response.statusCode} ${response.body}');
+    if (response.statusCode != 200) {
+      String message = 'Failed to resolve (${response.statusCode}).';
+      try {
+        final body = jsonDecode(response.body);
+        if (body['error'] != null) message = body['error'];
+      } catch (_) {}
+      throw Exception(message);
     }
   }
 

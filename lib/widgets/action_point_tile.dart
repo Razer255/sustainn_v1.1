@@ -4,9 +4,9 @@ import '../theme/app_colors.dart';
 
 /// A list tile for displaying an action point with priority indicator,
 /// due date, and resolve action.
-class ActionPointTile extends StatelessWidget {
+class ActionPointTile extends StatefulWidget {
   final ActionPointModel actionPoint;
-  final VoidCallback? onResolve;
+  final Future<void> Function()? onResolve;
   final VoidCallback? onTap;
 
   const ActionPointTile({
@@ -17,7 +17,29 @@ class ActionPointTile extends StatelessWidget {
   });
 
   @override
+  State<ActionPointTile> createState() => _ActionPointTileState();
+}
+
+class _ActionPointTileState extends State<ActionPointTile> {
+  bool _isResolving = false;
+
+  Future<void> _handleResolve() async {
+    if (_isResolving || widget.onResolve == null) return;
+    setState(() => _isResolving = true);
+    try {
+      await widget.onResolve!();
+    } finally {
+      // The tile is usually removed from the list once resolved, but
+      // guard against it still being mounted (e.g. the resolve call
+      // failed) so a second tap isn't blocked forever.
+      if (mounted) setState(() => _isResolving = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final actionPoint = widget.actionPoint;
+    final onTap = widget.onTap;
     final isOverdue = actionPoint.isOverdue;
 
     return GestureDetector(
@@ -137,17 +159,26 @@ class ActionPointTile extends StatelessWidget {
             ),
 
             // Resolve button
-            if (!actionPoint.resolved && onResolve != null)
-              IconButton(
-                onPressed: onResolve,
-                icon: const Icon(
-                  Icons.check_circle_outline,
-                  color: AppColors.primary,
-                  size: 22,
-                ),
-                constraints: const BoxConstraints(),
-                padding: const EdgeInsets.only(left: 8),
-                tooltip: 'Mark as resolved',
+            if (!actionPoint.resolved && widget.onResolve != null)
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: _isResolving
+                    ? const Padding(
+                        padding: EdgeInsets.all(2),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : IconButton(
+                        onPressed: _handleResolve,
+                        icon: const Icon(
+                          Icons.check_circle_outline,
+                          color: AppColors.primary,
+                          size: 22,
+                        ),
+                        constraints: const BoxConstraints(),
+                        padding: EdgeInsets.zero,
+                        tooltip: 'Mark as resolved',
+                      ),
               ),
           ],
         ),
@@ -156,7 +187,7 @@ class ActionPointTile extends StatelessWidget {
   }
 
   Color get _priorityColor {
-    switch (actionPoint.priority) {
+    switch (widget.actionPoint.priority) {
       case ActionPriority.high:
         return AppColors.danger;
       case ActionPriority.medium:
@@ -167,7 +198,7 @@ class ActionPointTile extends StatelessWidget {
   }
 
   IconData get _priorityIcon {
-    switch (actionPoint.priority) {
+    switch (widget.actionPoint.priority) {
       case ActionPriority.high:
         return Icons.warning_amber_rounded;
       case ActionPriority.medium:
