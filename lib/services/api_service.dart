@@ -1,15 +1,39 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:http/http.dart' as http;
 
 /// API Service providing CRUD operations for all entities via REST.
 /// Replace `_baseUrl` with your actual backend URL.
+///
+/// The auth token is held statically (not per-instance) because every
+/// call site does `ApiService()` to get a throwaway instance — an
+/// instance field here would be set once after login and then lost
+/// immediately, silently sending every subsequent request unauthenticated.
 class ApiService {
   final String _baseUrl = 'https://sustainn-v1-1.onrender.com/api';
-  String? _authToken;
+  static const _authTokenKey = 'auth_token';
+  static String? _authToken;
 
-  void setAuthToken(String token) {
+  /// Sets the token in memory and persists it to disk so a restored
+  /// session (via AuthService.tryAutoLogin) has it available again
+  /// without requiring the farmer to log in again.
+  static Future<void> setAuthToken(String? token) async {
     _authToken = token;
+    final prefsBox = await Hive.openBox('prefs');
+    if (token == null) {
+      await prefsBox.delete(_authTokenKey);
+    } else {
+      await prefsBox.put(_authTokenKey, token);
+    }
+  }
+
+  /// Restores a previously saved token from disk. Call once at startup
+  /// (alongside AuthService.tryAutoLogin) before any authenticated
+  /// request is made.
+  static Future<void> restoreAuthToken() async {
+    final prefsBox = await Hive.openBox('prefs');
+    _authToken = prefsBox.get(_authTokenKey) as String?;
   }
 
   Map<String, String> get _headers {
@@ -33,7 +57,7 @@ class ApiService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['token'] != null) {
-          setAuthToken(data['token']);
+          await setAuthToken(data['token']);
         }
         return data; // e.g. {'token': '...', 'user': {...}}
       }
@@ -64,20 +88,32 @@ class ApiService {
     return jsonDecode(response.body);
   }
 
-  /// Creates the user's profile on the backend. Throws on any failure
-  /// instead of silently saving to local mock data only — a caller that
-  /// doesn't check for an exception must not be able to tell a real
-  /// success from a failed request that was quietly absorbed here.
+  /// Creates the user's profile on the backend (signup) and stores the
+  /// auth token the backend issues immediately on success — the farmer
+  /// is authenticated as soon as their account is created, same as
+  /// login. Throws on any failure instead of silently saving to local
+  /// mock data only — a caller that doesn't check for an exception must
+  /// not be able to tell a real success from a failed request that was
+  /// quietly absorbed here.
   Future<void> createUser(String userId, Map<String, dynamic> data) async {
     debugPrint('[ApiService] createUser($userId)');
     final payload = Map<String, dynamic>.from(data)..['id'] = userId;
     final response = await http.post(
       Uri.parse('$_baseUrl/users'),
-      headers: _headers,
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode(payload),
     ).timeout(const Duration(seconds: 15));
     if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception('Failed to create user (${response.statusCode}).');
+      String message = 'Failed to create user (${response.statusCode}).';
+      try {
+        final body = jsonDecode(response.body);
+        if (body['error'] != null) message = body['error'];
+      } catch (_) {}
+      throw Exception(message);
+    }
+    final body = jsonDecode(response.body);
+    if (body['token'] != null) {
+      await setAuthToken(body['token']);
     }
   }
 

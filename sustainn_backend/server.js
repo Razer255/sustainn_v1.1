@@ -1,10 +1,20 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET is not set. Refusing to start without it.');
+  process.exit(1);
+}
+const JWT_EXPIRES_IN = '30d';
+const BCRYPT_ROUNDS = 10;
 
 // Middleware
 app.use(cors());
@@ -137,6 +147,76 @@ app.get('/api/location/districts', (req, res) => {
   if (!state) return res.json([]);
   res.json(state.districts);
 });
+
+// ─── Farmer Auth ──────────────────────────────────────────────
+// Verifies the JWT issued at login, sent as 'Authorization: Bearer <token>'.
+// Attaches req.userId so routes can check the caller actually owns the
+// field/crop/activity/etc. they're trying to read or modify.
+
+function requireAuth(req, res, next) {
+  const header = req.header('Authorization');
+  const token = header && header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) {
+    return res.status(401).json({ error: 'Missing or invalid Authorization header.' });
+  }
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    req.userId = payload.userId;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token.' });
+  }
+}
+
+/**
+ * Confirms the authenticated user (req.userId) owns the field being
+ * referenced, either directly (fieldId) or transitively via a crop or
+ * activity id. Returns the resolved field on success, or sends a 403/404
+ * response and returns null — callers should `return` immediately when
+ * this returns null.
+ */
+async function ownsField(req, res, { fieldId, cropId, activityId } = {}) {
+  let resolvedFieldId = fieldId;
+
+  if (!resolvedFieldId && cropId) {
+    const crop = await Crop.findById(cropId);
+    if (!crop) {
+      res.status(404).json({ error: 'Crop not found' });
+      return null;
+    }
+    resolvedFieldId = crop.fieldId;
+  }
+
+  if (!resolvedFieldId && activityId) {
+    const activity = await Activity.findById(activityId);
+    if (!activity) {
+      res.status(404).json({ error: 'Activity not found' });
+      return null;
+    }
+    const crop = await Crop.findById(activity.cropId);
+    if (!crop) {
+      res.status(404).json({ error: 'Crop not found' });
+      return null;
+    }
+    resolvedFieldId = crop.fieldId;
+  }
+
+  if (!resolvedFieldId) {
+    res.status(400).json({ error: 'fieldId, cropId, or activityId is required.' });
+    return null;
+  }
+
+  const field = await Field.findById(resolvedFieldId);
+  if (!field) {
+    res.status(404).json({ error: 'Field not found' });
+    return null;
+  }
+  if (field.ownerId !== req.userId) {
+    res.status(403).json({ error: 'You do not have access to this resource.' });
+    return null;
+  }
+  return field;
+}
 
 // ─── Admin Routes ─────────────────────────────────────────────
 // Protected by a static API key (ADMIN_API_KEY) sent as 'x-admin-key'.
@@ -468,32 +548,62 @@ app.post('/api/admin/action-points', requireAdminKey, async (req, res) => {
 
 // ─── REST API Routes ──────────────────────────────────────────
 
+// A stored password is either a bcrypt hash (always starts with $2) or a
+// legacy plaintext value from before hashing was added. This lets old
+// accounts keep working and upgrades them to a hash on next successful
+// login, instead of locking everyone out the moment hashing shipped.
+function looksHashed(password) {
+  return typeof password === 'string' && password.startsWith('$2');
+}
+
+async function verifyPassword(plainPassword, storedPassword) {
+  const effectiveStored = storedPassword || 'password123';
+  if (looksHashed(effectiveStored)) {
+    return bcrypt.compare(plainPassword, effectiveStored);
+  }
+  return plainPassword === effectiveStored;
+}
+
+function issueToken(userId) {
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+}
+
 // Auth Login
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { identifier, password } = req.body;
     console.log(`[POST] /api/auth/login with identifier: ${identifier}`);
+
+    if (!identifier || !password) {
+      return res.status(400).json({ error: 'identifier and password are required.' });
+    }
+
     // Clean identifier to check match
     const cleanPhone = identifier.replace(/[^0-9]/g, '');
-    let user = await User.findOne({ 
-      $or: [
-        { phone: identifier },
-        { phone: new RegExp(cleanPhone + '$') }
-      ] 
-    });
-    
+    const orConditions = [{ phone: identifier }];
+    if (cleanPhone) {
+      orConditions.push({ phone: new RegExp(cleanPhone + '$') });
+    }
+    let user = await User.findOne({ $or: orConditions });
+
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials.' });
     }
-    
-    if (user.password && user.password !== password) {
-      return res.status(401).json({ error: 'Invalid credentials.' });
-    } else if (!user.password && password !== 'password123') {
+
+    const passwordMatches = await verifyPassword(password, user.password);
+    if (!passwordMatches) {
       return res.status(401).json({ error: 'Invalid credentials.' });
     }
-    
+
+    // Opportunistically upgrade a legacy plaintext password to a hash
+    // now that we know it's correct.
+    if (!looksHashed(user.password)) {
+      user.password = await bcrypt.hash(password, BCRYPT_ROUNDS);
+      await user.save();
+    }
+
     res.json({
-      token: 'mock_token_jwt_' + user._id,
+      token: issueToken(user._id),
       user: {
         id: user._id,
         phone: user.phone,
@@ -505,48 +615,66 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Create User Profile
+// Create User Profile (signup). Unauthenticated by necessity — the
+// farmer doesn't have a token until this succeeds — but only creates
+// brand-new accounts; it no longer lets a caller "update" an arbitrary
+// existing id without proving ownership (that upsert previously let
+// anyone who knew/guessed a user id overwrite that account).
 app.post('/api/users', async (req, res) => {
   try {
     const { phone, name, guardianName, language, region, id, password } = req.body;
-    console.log(`[POST] /api/users creating/updating userId: ${id}`);
+    console.log(`[POST] /api/users creating userId: ${id}`);
 
-    let user = await User.findById(id);
-    if (user) {
-      user.phone = phone;
-      user.name = name;
-      user.guardianName = guardianName;
-      user.language = language;
-      user.region = region;
-      if (password) user.password = password;
-      await user.save();
-    } else {
-      user = new User({ _id: id, phone, name, guardianName, language, region, password });
-      await user.save();
+    if (!id || !phone || !name || !password) {
+      return res.status(400).json({ error: 'id, phone, name, and password are required.' });
     }
-    res.status(201).json(user);
+
+    const existingById = await User.findById(id);
+    if (existingById) {
+      return res.status(409).json({ error: 'A user with this id already exists.' });
+    }
+    const existingByPhone = await User.findOne({ phone });
+    if (existingByPhone) {
+      return res.status(409).json({ error: 'An account with this phone number already exists.' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const user = new User({ _id: id, phone, name, guardianName, language, region, password: hashedPassword });
+    await user.save();
+
+    res.status(201).json({
+      token: issueToken(user._id),
+      user: { id: user._id, phone: user.phone, name: user.name }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Get User Profile
-app.get('/api/users/:userId', async (req, res) => {
+// Get User Profile — only the signed-in user can read their own profile.
+app.get('/api/users/:userId', requireAuth, async (req, res) => {
   try {
     console.log(`[GET] /api/users/${req.params.userId}`);
+    if (req.params.userId !== req.userId) {
+      return res.status(403).json({ error: 'You do not have access to this profile.' });
+    }
     const user = await User.findById(req.params.userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    res.json(user);
+    const { password, ...safeUser } = user.toObject();
+    res.json(safeUser);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // Update User Profile (name, guardianName, phone, region, language — not password)
-app.put('/api/users/:userId', async (req, res) => {
+app.put('/api/users/:userId', requireAuth, async (req, res) => {
   try {
+    if (req.params.userId !== req.userId) {
+      return res.status(403).json({ error: 'You do not have access to this profile.' });
+    }
     const { name, guardianName, phone, region, language } = req.body;
     console.log(`[PUT] /api/users/${req.params.userId}`);
     const user = await User.findById(req.params.userId);
@@ -559,15 +687,19 @@ app.put('/api/users/:userId', async (req, res) => {
     if (region !== undefined) user.region = region;
     if (language !== undefined) user.language = language;
     await user.save();
-    res.json(user);
+    const { password, ...safeUser } = user.toObject();
+    res.json(safeUser);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // Change Password
-app.post('/api/users/:userId/change-password', async (req, res) => {
+app.post('/api/users/:userId/change-password', requireAuth, async (req, res) => {
   try {
+    if (req.params.userId !== req.userId) {
+      return res.status(403).json({ error: 'You do not have access to this profile.' });
+    }
     const { currentPassword, newPassword } = req.body;
     console.log(`[POST] /api/users/${req.params.userId}/change-password`);
 
@@ -580,12 +712,12 @@ app.post('/api/users/:userId/change-password', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const effectiveCurrentPassword = user.password || 'password123';
-    if (effectiveCurrentPassword !== currentPassword) {
+    const currentMatches = await verifyPassword(currentPassword, user.password);
+    if (!currentMatches) {
       return res.status(401).json({ error: 'Current password is incorrect.' });
     }
 
-    user.password = newPassword;
+    user.password = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     await user.save();
     res.json({ success: true });
   } catch (err) {
@@ -594,10 +726,16 @@ app.post('/api/users/:userId/change-password', async (req, res) => {
 });
 
 // Get Fields List
-app.get('/api/fields', async (req, res) => {
+app.get('/api/fields', requireAuth, async (req, res) => {
   try {
     const { ownerId } = req.query;
     console.log(`[GET] /api/fields for ownerId: ${ownerId}`);
+    if (!ownerId) {
+      return res.status(400).json({ error: 'ownerId is required.' });
+    }
+    if (ownerId !== req.userId) {
+      return res.status(403).json({ error: 'You do not have access to this farmer\'s fields.' });
+    }
     const fields = await Field.find({ ownerId });
     res.json(fields.map(f => ({
       id: f._id,
@@ -618,14 +756,16 @@ app.get('/api/fields', async (req, res) => {
   }
 });
 
-// Add Field
-app.post('/api/fields', async (req, res) => {
+// Add Field — ownerId is always the authenticated user, never trusted
+// from the request body, so a farmer can't create a field under
+// someone else's account.
+app.post('/api/fields', requireAuth, async (req, res) => {
   try {
-    const { id, ownerId, name, area, latitude, longitude, boundaryPoints, soilType } = req.body;
+    const { id, name, area, latitude, longitude, boundaryPoints, soilType } = req.body;
     console.log(`[POST] /api/fields adding field: ${name}`);
     const field = new Field({
       _id: id || new mongoose.Types.ObjectId().toString(),
-      ownerId,
+      ownerId: req.userId,
       name,
       area,
       latitude,
@@ -641,16 +781,13 @@ app.post('/api/fields', async (req, res) => {
 });
 
 // Update Field
-app.put('/api/fields/:fieldId', async (req, res) => {
+app.put('/api/fields/:fieldId', requireAuth, async (req, res) => {
   try {
-    const { name, area, latitude, longitude, boundaryPoints, soilType } = req.body;
     console.log(`[PUT] /api/fields/${req.params.fieldId}`);
+    const field = await ownsField(req, res, { fieldId: req.params.fieldId });
+    if (!field) return;
 
-    const field = await Field.findById(req.params.fieldId);
-    if (!field) {
-      return res.status(404).json({ error: 'Field not found' });
-    }
-
+    const { name, area, latitude, longitude, boundaryPoints, soilType } = req.body;
     if (name !== undefined) field.name = name;
     if (area !== undefined) field.area = area;
     if (latitude !== undefined) field.latitude = latitude;
@@ -667,9 +804,11 @@ app.put('/api/fields/:fieldId', async (req, res) => {
 
 // Delete Field — refused if any crop still references it, to avoid
 // orphaning crop/activity/financial records.
-app.delete('/api/fields/:fieldId', async (req, res) => {
+app.delete('/api/fields/:fieldId', requireAuth, async (req, res) => {
   try {
     console.log(`[DELETE] /api/fields/${req.params.fieldId}`);
+    const field = await ownsField(req, res, { fieldId: req.params.fieldId });
+    if (!field) return;
 
     const cropCount = await Crop.countDocuments({ fieldId: req.params.fieldId });
     if (cropCount > 0) {
@@ -678,11 +817,7 @@ app.delete('/api/fields/:fieldId', async (req, res) => {
       });
     }
 
-    const result = await Field.findByIdAndDelete(req.params.fieldId);
-    if (!result) {
-      return res.status(404).json({ error: 'Field not found' });
-    }
-
+    await Field.findByIdAndDelete(req.params.fieldId);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -690,10 +825,16 @@ app.delete('/api/fields/:fieldId', async (req, res) => {
 });
 
 // Get Crops List
-app.get('/api/crops', async (req, res) => {
+app.get('/api/crops', requireAuth, async (req, res) => {
   try {
     const { fieldId } = req.query;
     console.log(`[GET] /api/crops for fieldId: ${fieldId}`);
+    if (!fieldId) {
+      return res.status(400).json({ error: 'fieldId is required.' });
+    }
+    const field = await ownsField(req, res, { fieldId });
+    if (!field) return;
+
     const crops = await Crop.find({ fieldId });
     res.json(crops.map(c => ({
       id: c._id,
@@ -715,10 +856,13 @@ app.get('/api/crops', async (req, res) => {
 });
 
 // Add Crop
-app.post('/api/crops', async (req, res) => {
+app.post('/api/crops', requireAuth, async (req, res) => {
   try {
     const { id, fieldId, season, cropName, variety, sownDate, expectedHarvestDate, isIntercrop, areaCovered } = req.body;
     console.log(`[POST] /api/crops adding crop: ${cropName}`);
+    const field = await ownsField(req, res, { fieldId });
+    if (!field) return;
+
     const crop = new Crop({
       _id: id || new mongoose.Types.ObjectId().toString(),
       fieldId,
@@ -742,15 +886,14 @@ app.post('/api/crops', async (req, res) => {
 });
 
 // Update Crop
-app.put('/api/crops/:cropId', async (req, res) => {
+app.put('/api/crops/:cropId', requireAuth, async (req, res) => {
   try {
-    const { season, cropName, variety, sownDate, expectedHarvestDate, status, isIntercrop, areaCovered } = req.body;
     console.log(`[PUT] /api/crops/${req.params.cropId}`);
+    const field = await ownsField(req, res, { cropId: req.params.cropId });
+    if (!field) return;
 
+    const { season, cropName, variety, sownDate, expectedHarvestDate, status, isIntercrop, areaCovered } = req.body;
     const crop = await Crop.findById(req.params.cropId);
-    if (!crop) {
-      return res.status(404).json({ error: 'Crop not found' });
-    }
 
     if (season !== undefined) crop.season = season;
     if (cropName !== undefined) crop.cropName = cropName;
@@ -770,14 +913,13 @@ app.put('/api/crops/:cropId', async (req, res) => {
 
 // Delete Crop — refused if it has any logged activities, so a farmer
 // can't accidentally lose activity history without realizing it.
-app.delete('/api/crops/:cropId', async (req, res) => {
+app.delete('/api/crops/:cropId', requireAuth, async (req, res) => {
   try {
     console.log(`[DELETE] /api/crops/${req.params.cropId}`);
+    const field = await ownsField(req, res, { cropId: req.params.cropId });
+    if (!field) return;
 
     const crop = await Crop.findById(req.params.cropId);
-    if (!crop) {
-      return res.status(404).json({ error: 'Crop not found' });
-    }
 
     const activityCount = await Activity.countDocuments({ cropId: req.params.cropId });
     if (activityCount > 0) {
@@ -798,10 +940,16 @@ app.delete('/api/crops/:cropId', async (req, res) => {
 });
 
 // Get Activities
-app.get('/api/activities', async (req, res) => {
+app.get('/api/activities', requireAuth, async (req, res) => {
   try {
     const { cropId } = req.query;
     console.log(`[GET] /api/activities for cropId: ${cropId}`);
+    if (!cropId) {
+      return res.status(400).json({ error: 'cropId is required.' });
+    }
+    const field = await ownsField(req, res, { cropId });
+    if (!field) return;
+
     const activities = await Activity.find({ cropId }).sort({ date: -1 });
     res.json(activities.map(a => ({
       id: a._id,
@@ -824,10 +972,13 @@ app.get('/api/activities', async (req, res) => {
 });
 
 // Log Activity
-app.post('/api/activities', async (req, res) => {
+app.post('/api/activities', requireAuth, async (req, res) => {
   try {
-    const { id, cropId, type, subtype, date, areaCovered, areaUnit, notes, cost, quantity, unit, createdBy, attributes } = req.body;
+    const { id, cropId, type, subtype, date, areaCovered, areaUnit, notes, cost, quantity, unit, attributes } = req.body;
     console.log(`[POST] /api/activities logging activity: ${type}`);
+    const field = await ownsField(req, res, { cropId });
+    if (!field) return;
+
     const activity = new Activity({
       _id: id || new mongoose.Types.ObjectId().toString(),
       cropId,
@@ -840,7 +991,7 @@ app.post('/api/activities', async (req, res) => {
       cost,
       quantity,
       unit,
-      createdBy,
+      createdBy: req.userId,
       attributes
     });
     await activity.save();
@@ -864,15 +1015,14 @@ app.post('/api/activities', async (req, res) => {
 });
 
 // Update Activity
-app.put('/api/activities/:activityId', async (req, res) => {
+app.put('/api/activities/:activityId', requireAuth, async (req, res) => {
   try {
-    const { type, subtype, date, areaCovered, areaUnit, notes, cost, quantity, unit, attributes } = req.body;
     console.log(`[PUT] /api/activities/${req.params.activityId}`);
+    const field = await ownsField(req, res, { activityId: req.params.activityId });
+    if (!field) return;
 
+    const { type, subtype, date, areaCovered, areaUnit, notes, cost, quantity, unit, attributes } = req.body;
     const activity = await Activity.findById(req.params.activityId);
-    if (!activity) {
-      return res.status(404).json({ error: 'Activity not found' });
-    }
 
     const oldCost = activity.cost || 0;
     const newCost = cost || 0;
@@ -905,14 +1055,13 @@ app.put('/api/activities/:activityId', async (req, res) => {
 });
 
 // Delete Activity
-app.delete('/api/activities/:activityId', async (req, res) => {
+app.delete('/api/activities/:activityId', requireAuth, async (req, res) => {
   try {
     console.log(`[DELETE] /api/activities/${req.params.activityId}`);
+    const field = await ownsField(req, res, { activityId: req.params.activityId });
+    if (!field) return;
 
     const activity = await Activity.findByIdAndDelete(req.params.activityId);
-    if (!activity) {
-      return res.status(404).json({ error: 'Activity not found' });
-    }
 
     await Crop.findByIdAndUpdate(activity.cropId, { $inc: { activityCount: -1 } });
 
@@ -931,9 +1080,12 @@ app.delete('/api/activities/:activityId', async (req, res) => {
 });
 
 // Get Financials
-app.get('/api/financials/:cropId', async (req, res) => {
+app.get('/api/financials/:cropId', requireAuth, async (req, res) => {
   try {
     console.log(`[GET] /api/financials for cropId: ${req.params.cropId}`);
+    const field = await ownsField(req, res, { cropId: req.params.cropId });
+    if (!field) return;
+
     let fin = await Financial.findOne({ cropId: req.params.cropId });
     if (!fin) {
       fin = new Financial({
@@ -959,10 +1111,13 @@ app.get('/api/financials/:cropId', async (req, res) => {
 });
 
 // Update Financials
-app.put('/api/financials/:cropId', async (req, res) => {
+app.put('/api/financials/:cropId', requireAuth, async (req, res) => {
   try {
-    const { inputCost, expectedRevenue, actualRevenue } = req.body;
     console.log(`[PUT] /api/financials for cropId: ${req.params.cropId}`);
+    const field = await ownsField(req, res, { cropId: req.params.cropId });
+    if (!field) return;
+
+    const { inputCost, expectedRevenue, actualRevenue } = req.body;
     const fin = await Financial.findOneAndUpdate(
       { cropId: req.params.cropId },
       { 
@@ -979,15 +1134,45 @@ app.put('/api/financials/:cropId', async (req, res) => {
   }
 });
 
+/**
+ * Confirms the authenticated user owns the thing an action point's
+ * scope/refId points at (farmer=self, field=their field, crop=their
+ * crop's field). Returns true on success, or sends a 403/404/400 and
+ * returns false — callers should `return` immediately when false.
+ */
+async function ownsActionPointRef(req, res, scope, refId) {
+  if (!scope || !refId) {
+    res.status(400).json({ error: 'scope and refId are required.' });
+    return false;
+  }
+  if (scope === 'farmer') {
+    if (refId !== req.userId) {
+      res.status(403).json({ error: 'You do not have access to this resource.' });
+      return false;
+    }
+    return true;
+  }
+  if (scope === 'field') {
+    const field = await ownsField(req, res, { fieldId: refId });
+    return !!field;
+  }
+  if (scope === 'crop') {
+    const field = await ownsField(req, res, { cropId: refId });
+    return !!field;
+  }
+  res.status(400).json({ error: 'scope must be one of: farmer, field, crop' });
+  return false;
+}
+
 // Get Action Points
-app.get('/api/action-points', async (req, res) => {
+app.get('/api/action-points', requireAuth, async (req, res) => {
   try {
     const { scope, refId } = req.query;
     console.log(`[GET] /api/action-points scope=${scope}, refId=${refId}`);
-    const query = { resolved: false };
-    if (scope) query.scope = scope;
-    if (refId) query.refId = refId;
-    const aps = await ActionPoint.find(query);
+    const owns = await ownsActionPointRef(req, res, scope, refId);
+    if (!owns) return;
+
+    const aps = await ActionPoint.find({ scope, refId, resolved: false });
     res.json(aps.map(ap => ({
       id: ap._id,
       scope: ap.scope,
@@ -1005,9 +1190,16 @@ app.get('/api/action-points', async (req, res) => {
 });
 
 // Resolve Action Point
-app.put('/api/action-points/:apId/resolve', async (req, res) => {
+app.put('/api/action-points/:apId/resolve', requireAuth, async (req, res) => {
   try {
     console.log(`[PUT] /api/action-points/resolve: ${req.params.apId}`);
+    const existing = await ActionPoint.findById(req.params.apId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Action point not found' });
+    }
+    const owns = await ownsActionPointRef(req, res, existing.scope, existing.refId);
+    if (!owns) return;
+
     const ap = await ActionPoint.findByIdAndUpdate(
       req.params.apId,
       { resolved: true },
@@ -1019,14 +1211,14 @@ app.put('/api/action-points/:apId/resolve', async (req, res) => {
   }
 });
 
-// Submit an Issue Report (farmer-facing — no admin key required)
-app.post('/api/issue-reports', async (req, res) => {
+// Submit an Issue Report (farmer-facing — requires login, but no admin key)
+app.post('/api/issue-reports', requireAuth, async (req, res) => {
   try {
-    const { userId, userName, userPhone, message } = req.body;
-    console.log(`[POST] /api/issue-reports from userId: ${userId}`);
+    const { userName, userPhone, message } = req.body;
+    console.log(`[POST] /api/issue-reports from userId: ${req.userId}`);
 
-    if (!userId || !userName || !userPhone || !message) {
-      return res.status(400).json({ error: 'userId, userName, userPhone, and message are required.' });
+    if (!userName || !userPhone || !message) {
+      return res.status(400).json({ error: 'userName, userPhone, and message are required.' });
     }
     if (message.length > 1000) {
       return res.status(400).json({ error: 'Message must be 1000 characters or fewer.' });
@@ -1034,7 +1226,7 @@ app.post('/api/issue-reports', async (req, res) => {
 
     const report = new IssueReport({
       _id: new mongoose.Types.ObjectId().toString(),
-      userId,
+      userId: req.userId,
       userName,
       userPhone,
       message: message.trim()

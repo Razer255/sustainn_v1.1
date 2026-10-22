@@ -37,6 +37,11 @@ class AuthService extends ChangeNotifier {
     final savedUserId = prefsBox.get(_sessionUserIdKey) as String?;
     if (savedUserId == null) return;
 
+    // The backend now requires a valid auth token on every request; the
+    // token issued at login must be restored before any of the calls
+    // below, or they'll all fail with 401.
+    await ApiService.restoreAuthToken();
+
     _isAuthenticated = true;
     _userId = savedUserId;
     _phoneNumber = prefsBox.get(_sessionPhoneKey) as String?;
@@ -143,6 +148,7 @@ class AuthService extends ChangeNotifier {
     _userProfileExists = false;
 
     MockData.resetForLogout();
+    await ApiService.setAuthToken(null);
 
     final prefsBox = await Hive.openBox('prefs');
     await prefsBox.delete(_sessionUserIdKey);
