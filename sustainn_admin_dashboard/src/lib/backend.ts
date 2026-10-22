@@ -151,3 +151,19 @@ export const resolveIssueReport = (id: string) =>
 
 export const deleteIssueReport = (id: string) =>
   fetchFromBackend(`/api/admin/issue-reports/${id}`, { method: 'DELETE' });
+
+export type NewActionPoint = {
+  scope: 'farmer' | 'field' | 'crop';
+  refId: string;
+  message: string;
+  priority: 'high' | 'medium' | 'low';
+  dueDate?: string;
+  category?: string;
+};
+
+export const createActionPoint = (data: NewActionPoint) =>
+  fetchFromBackend<{ id: string }>('/api/admin/action-points', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });

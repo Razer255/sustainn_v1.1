@@ -425,6 +425,47 @@ app.delete('/api/admin/issue-reports/:reportId', requireAdminKey, async (req, re
   }
 });
 
+// Manually create an action point for a farmer, field, or crop. This is
+// the static/manual path while automatic computation (weather alerts,
+// fertilizer due-dates, etc.) is still unbuilt — an admin types the
+// message by hand and pushes it to the relevant scope.
+app.post('/api/admin/action-points', requireAdminKey, async (req, res) => {
+  try {
+    const { scope, refId, message, priority, dueDate, category } = req.body;
+
+    if (!['farmer', 'field', 'crop'].includes(scope)) {
+      return res.status(400).json({ error: 'scope must be one of: farmer, field, crop' });
+    }
+    if (!refId || !message || !priority) {
+      return res.status(400).json({ error: 'refId, message, and priority are required.' });
+    }
+
+    const refExists = scope === 'farmer'
+      ? await User.exists({ _id: refId })
+      : scope === 'field'
+      ? await Field.exists({ _id: refId })
+      : await Crop.exists({ _id: refId });
+    if (!refExists) {
+      return res.status(404).json({ error: `No ${scope} found with id ${refId}` });
+    }
+
+    const actionPoint = new ActionPoint({
+      _id: new mongoose.Types.ObjectId().toString(),
+      scope,
+      refId,
+      message,
+      priority,
+      dueDate: dueDate || undefined,
+      category: category || undefined
+    });
+    await actionPoint.save();
+
+    res.status(201).json({ id: actionPoint._id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── REST API Routes ──────────────────────────────────────────
 
 // Auth Login
