@@ -157,7 +157,16 @@ class _CropSummaryScreenState extends State<CropSummaryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final crop = MockData.crops.firstWhere((c) => c.id == cropId);
+    final cropIndex = MockData.crops.indexWhere((c) => c.id == cropId);
+    if (cropIndex == -1) {
+      // Reached via a stale card (e.g. the crop was deleted from another
+      // screen) — back out instead of crashing on firstWhere.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.pop(context, true);
+      });
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final crop = MockData.crops[cropIndex];
     final activities = MockData.getActivitiesForCrop(cropId);
     final financials = MockData.getFinancialsForCrop(cropId);
     final actionPoints = MockData.getActionPointsForScope(

@@ -41,8 +41,17 @@ class AuthService extends ChangeNotifier {
     _userId = savedUserId;
     _phoneNumber = prefsBox.get(_sessionPhoneKey) as String?;
 
-    final profile = await _apiService.getUser(savedUserId);
-    _userProfileExists = profile != null;
+    // A saved session is restored even if the profile fetch fails here
+    // (e.g. no network on cold start) — the farmer already has a valid
+    // session and shouldn't be logged out just because the server was
+    // briefly unreachable. loadAppData below has its own error handling
+    // for the rest of the sync.
+    try {
+      await _apiService.getUser(savedUserId);
+      _userProfileExists = true;
+    } catch (e) {
+      debugPrint('[AuthService] Could not refresh profile on auto-login: $e');
+    }
 
     await loadAppData(savedUserId);
     notifyListeners();
@@ -63,9 +72,15 @@ class AuthService extends ChangeNotifier {
       await prefsBox.put(_sessionUserIdKey, _userId);
       await prefsBox.put(_sessionPhoneKey, _phoneNumber);
 
-      // Check if user profile exists
-      final profile = await _apiService.getUser(_userId!);
-      _userProfileExists = profile != null;
+      // Login already succeeded with valid credentials, so a hiccup
+      // fetching the profile right after shouldn't fail the whole login.
+      try {
+        await _apiService.getUser(_userId!);
+        _userProfileExists = true;
+      } catch (e) {
+        debugPrint('[AuthService] Could not fetch profile right after login: $e');
+        _userProfileExists = true;
+      }
 
       // Sync all user's data from backend MongoDB
       await loadAppData(_userId!);
@@ -80,9 +95,7 @@ class AuthService extends ChangeNotifier {
     try {
       // 1. User profile
       final userMap = await _apiService.getUser(userId);
-      if (userMap != null) {
-        MockData.currentUser = UserModel.fromMap(userMap, userId);
-      }
+      MockData.currentUser = UserModel.fromMap(userMap, userId);
 
       // 2. Fields
       final fieldsList = await _apiService.getFieldsStream(userId).first;
@@ -128,6 +141,8 @@ class AuthService extends ChangeNotifier {
     _userId = null;
     _phoneNumber = null;
     _userProfileExists = false;
+
+    MockData.resetForLogout();
 
     final prefsBox = await Hive.openBox('prefs');
     await prefsBox.delete(_sessionUserIdKey);

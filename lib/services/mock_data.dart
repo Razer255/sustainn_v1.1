@@ -313,6 +313,18 @@ class MockData {
     ),
   ];
 
+  /// Clears every farmer's data held in memory. Called on logout so the
+  /// next person to sign in on this device (or the next successful
+  /// login, before loadAppData refills everything) never briefly sees
+  /// the previous farmer's fields, crops, activities or profile.
+  static void resetForLogout() {
+    fields.clear();
+    crops.clear();
+    activities.clear();
+    actionPoints.clear();
+    financials.clear();
+  }
+
   // ─── Helper methods ────────────────────────────────────────
 
   static List<CropModel> getCropsForField(String fieldId) {

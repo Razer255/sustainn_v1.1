@@ -82,7 +82,16 @@ class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final field = MockData.fields.firstWhere((f) => f.id == widget.fieldId);
+    final fieldIndex = MockData.fields.indexWhere((f) => f.id == widget.fieldId);
+    if (fieldIndex == -1) {
+      // Reached via a stale card (e.g. the field was deleted from another
+      // screen) — back out instead of crashing on firstWhere.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.pop(context, true);
+      });
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final field = MockData.fields[fieldIndex];
     final crops = MockData.getCropsForField(widget.fieldId);
     final actionPoints = MockData.getActionPointsForScope(
       ActionScope.field,

@@ -1,8 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../models/user_model.dart';
-import 'mock_data.dart';
 
 /// API Service providing CRUD operations for all entities via REST.
 /// Replace `_baseUrl` with your actual backend URL.
@@ -49,42 +47,37 @@ class ApiService {
 
   // ─── Users ──────────────────────────────────────────────────
 
-  Future<Map<String, dynamic>?> getUser(String userId) async {
+  /// Fetches the user's profile. Throws on any failure (network error,
+  /// timeout, non-200 response) rather than silently falling back to
+  /// local mock data — a fallback here previously made a slow network
+  /// show the seed demo user ("Rajesh Kumar") as if it were the real
+  /// signed-in farmer, and risked overwriting their real profile on save.
+  Future<Map<String, dynamic>> getUser(String userId) async {
     debugPrint('[ApiService] getUser($userId)');
-    try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/users/$userId'),
-        headers: _headers,
-      ).timeout(const Duration(seconds: 3));
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      }
-    } catch (e) {
-      debugPrint('Error getting user: $e. Falling back to local data.');
+    final response = await http.get(
+      Uri.parse('$_baseUrl/users/$userId'),
+      headers: _headers,
+    ).timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load user profile (${response.statusCode}).');
     }
-    return MockData.currentUser.toMap();
+    return jsonDecode(response.body);
   }
 
+  /// Creates the user's profile on the backend. Throws on any failure
+  /// instead of silently saving to local mock data only — a caller that
+  /// doesn't check for an exception must not be able to tell a real
+  /// success from a failed request that was quietly absorbed here.
   Future<void> createUser(String userId, Map<String, dynamic> data) async {
     debugPrint('[ApiService] createUser($userId)');
-    try {
-      final payload = Map<String, dynamic>.from(data)..['id'] = userId;
-      final response = await http.post(
-        Uri.parse('$_baseUrl/users'),
-        headers: _headers,
-        body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 3));
-      if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception('Failed to create user');
-      }
-    } catch (e) {
-      debugPrint('Error creating user: $e. Saving locally to MockData.');
-      try {
-        final userModel = UserModel.fromMap(data, userId);
-        MockData.currentUser = userModel;
-      } catch (ex) {
-        debugPrint('Error parsing user data: $ex');
-      }
+    final payload = Map<String, dynamic>.from(data)..['id'] = userId;
+    final response = await http.post(
+      Uri.parse('$_baseUrl/users'),
+      headers: _headers,
+      body: jsonEncode(payload),
+    ).timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to create user (${response.statusCode}).');
     }
   }
 

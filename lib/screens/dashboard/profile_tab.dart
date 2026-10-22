@@ -143,26 +143,30 @@ class ProfileTab extends StatelessWidget {
                 const SizedBox(height: 32),
                 Center(
                   child: ElevatedButton.icon(
-                    onPressed: () {
+                    onPressed: () async {
                       debugPrint('[ProfileTab] Logout button pressed');
                       try {
                         final authService = Provider.of<AuthService>(context, listen: false);
-                        authService.signOut();
+                        await authService.signOut();
                         debugPrint('[ProfileTab] Signed out from AuthService');
-                        Navigator.pushNamedAndRemoveUntil(
-                          context,
-                          AppRouter.login,
-                          (route) => false,
-                        );
+                        if (context.mounted) {
+                          Navigator.pushNamedAndRemoveUntil(
+                            context,
+                            AppRouter.login,
+                            (route) => false,
+                          );
+                        }
                         debugPrint('[ProfileTab] Navigation to login triggered');
                       } catch (e, stack) {
                         debugPrint('[ProfileTab] Logout error: $e\n$stack');
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Log out failed: $e'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Log out failed: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       }
                     },
                     style: ElevatedButton.styleFrom(

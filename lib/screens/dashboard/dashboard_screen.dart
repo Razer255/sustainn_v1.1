@@ -408,11 +408,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 final field = fields[index];
                 return _FieldCard(
                   field: field,
-                  onTap: () => Navigator.pushNamed(
-                    context,
-                    '/field-summary',
-                    arguments: field.id,
-                  ),
+                  onTap: () async {
+                    await Navigator.pushNamed(
+                      context,
+                      '/field-summary',
+                      arguments: field.id,
+                    );
+                    if (mounted) setState(() {});
+                  },
                 );
               },
               childCount: fields.length,
