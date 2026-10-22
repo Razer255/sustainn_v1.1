@@ -226,9 +226,11 @@ class _FieldSummaryScreenState extends State<FieldSummaryScreen> {
                         ),
                       ),
                       TextButton.icon(
-                        onPressed: () =>
-                            Navigator.pushNamed(context, '/add-crop',
-                                arguments: widget.fieldId),
+                        onPressed: () async {
+                          await Navigator.pushNamed(context, '/add-crop',
+                              arguments: widget.fieldId);
+                          if (mounted) setState(() {});
+                        },
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('Add Crop'),
                       ),

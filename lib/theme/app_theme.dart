@@ -161,11 +161,14 @@ class AppTheme {
       ),
 
       // ── FAB ──
+      // No explicit `shape` override: a forced CircleBorder here squeezes
+      // FloatingActionButton.extended's icon+label into a circle instead
+      // of its normal pill shape. Leaving shape unset lets each FAB type
+      // (plain circular vs. extended) use its correct Material default.
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.primary,
         foregroundColor: AppColors.onPrimary,
         elevation: 4,
-        shape: CircleBorder(),
       ),
 
       // ── Input Fields ──
