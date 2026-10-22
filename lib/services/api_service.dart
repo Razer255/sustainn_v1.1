@@ -276,7 +276,7 @@ class ApiService {
         Uri.parse('$_baseUrl/crops/$cropId'),
         headers: _headers,
         body: jsonEncode(data),
-      );
+      ).timeout(const Duration(seconds: 45));
       if (response.statusCode != 200) {
         throw Exception('Failed to update crop');
       }

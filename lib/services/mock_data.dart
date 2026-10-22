@@ -326,8 +326,12 @@ class MockData {
   /// maize + beans grown together), so they don't stack with each other —
   /// only the single largest intercrop area counts toward occupied land.
   /// Formula: sum(non-intercrop areas) + max(intercrop areas).
-  static double getOccupiedAreaForField(String fieldId) {
-    final cropsForField = getCropsForField(fieldId);
+  ///
+  /// Pass [excludeCropId] when editing a crop, so it isn't counted
+  /// against its own remaining field capacity.
+  static double getOccupiedAreaForField(String fieldId, {String? excludeCropId}) {
+    final cropsForField = getCropsForField(fieldId)
+        .where((c) => c.id != excludeCropId);
     final nonIntercropSum = cropsForField
         .where((c) => !c.isIntercrop)
         .fold<double>(0, (sum, c) => sum + c.areaCovered);

@@ -8,10 +8,16 @@ import '../../theme/app_colors.dart';
 
 /// Add Crop screen — form to add a new crop to a field.
 /// Collects: crop name (searchable), variety, sowing date.
+///
+/// When [existingCrop] is set, the screen edits that crop in place
+/// instead of creating a new one.
 class AddCropScreen extends StatefulWidget {
   final String fieldId;
+  final CropModel? existingCrop;
 
-  const AddCropScreen({super.key, required this.fieldId});
+  const AddCropScreen({super.key, required this.fieldId, this.existingCrop});
+
+  bool get isEditing => existingCrop != null;
 
   @override
   State<AddCropScreen> createState() => _AddCropScreenState();
@@ -65,6 +71,20 @@ class _AddCropScreenState extends State<AddCropScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    final existing = widget.existingCrop;
+    if (existing != null) {
+      _selectedCrop = existing.cropName;
+      _varietyController.text = existing.variety;
+      _areaController.text = existing.areaCovered.toString();
+      _isIntercrop = existing.isIntercrop;
+      _sownDate = existing.sownDate;
+      _expectedHarvest = existing.expectedHarvestDate;
+    }
+  }
+
+  @override
   void dispose() {
     _varietyController.dispose();
     _searchController.dispose();
@@ -76,7 +96,7 @@ class _AddCropScreenState extends State<AddCropScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Crop'),
+        title: Text(widget.isEditing ? 'Edit Crop' : 'Add Crop'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -282,7 +302,9 @@ class _AddCropScreenState extends State<AddCropScreen> {
                           ),
                         )
                       : const Icon(Icons.check),
-                  label: Text(_isLoading ? 'Saving...' : 'Add Crop'),
+                  label: Text(_isLoading
+                      ? 'Saving...'
+                      : (widget.isEditing ? 'Update Crop' : 'Add Crop')),
                 ),
               ),
 
@@ -305,13 +327,16 @@ class _AddCropScreenState extends State<AddCropScreen> {
     );
   }
 
-  /// Occupied area on the field if this new crop were added, given the
-  /// occupancy rule: sum(non-intercrop areas) + max(intercrop areas).
-  /// A new non-intercrop crop always adds on top. A new intercrop crop
-  /// only raises the total if it's larger than any existing intercrop
-  /// crop on the field (since intercrops share the same patch of land).
+  /// Occupied area on the field if this crop were saved with [newArea],
+  /// given the occupancy rule: sum(non-intercrop areas) + max(intercrop
+  /// areas). When editing, the crop being edited is excluded from the
+  /// "existing" totals so it isn't double-counted against itself.
+  /// A non-intercrop crop always adds on top. An intercrop crop only
+  /// raises the total if it's larger than any other intercrop crop on
+  /// the field (since intercrops share the same patch of land).
   double _projectedOccupiedArea(double newArea) {
-    final cropsForField = MockData.getCropsForField(widget.fieldId);
+    final cropsForField = MockData.getCropsForField(widget.fieldId)
+        .where((c) => c.id != widget.existingCrop?.id);
     final nonIntercropSum = cropsForField
         .where((c) => !c.isIntercrop)
         .fold<double>(0, (sum, c) => sum + c.areaCovered);
@@ -332,7 +357,10 @@ class _AddCropScreenState extends State<AddCropScreen> {
   /// of land simultaneously rather than each claiming their own.
   Widget _buildCapacityHelperText() {
     final field = MockData.fields.firstWhere((f) => f.id == widget.fieldId);
-    final occupied = MockData.getOccupiedAreaForField(widget.fieldId);
+    final occupied = MockData.getOccupiedAreaForField(
+      widget.fieldId,
+      excludeCropId: widget.existingCrop?.id,
+    );
     final available = field.area - occupied;
     final entered = double.tryParse(_areaController.text) ?? 0;
 
@@ -395,9 +423,14 @@ class _AddCropScreenState extends State<AddCropScreen> {
     // Warn but allow — occupancy rule: sum(non-intercrop areas) +
     // max(intercrop areas), since intercrop crops share the same patch
     // of land simultaneously rather than each claiming their own.
+    final isEditing = widget.isEditing;
     final projectedOccupied = _projectedOccupiedArea(area);
     if (projectedOccupied > field.area) {
-      final available = field.area - MockData.getOccupiedAreaForField(widget.fieldId);
+      final available = field.area -
+          MockData.getOccupiedAreaForField(
+            widget.fieldId,
+            excludeCropId: widget.existingCrop?.id,
+          );
       final proceed = await _confirmOverAllocation(
         fieldName: field.name,
         available: available,
@@ -408,44 +441,55 @@ class _AddCropScreenState extends State<AddCropScreen> {
 
     setState(() => _isLoading = true);
 
-    final newCrop = CropModel(
-      id: const Uuid().v4(),
+    final crop = CropModel(
+      id: isEditing ? widget.existingCrop!.id : const Uuid().v4(),
       fieldId: widget.fieldId,
-      season: 'Kharif 2026',
+      season: isEditing ? widget.existingCrop!.season : 'Kharif 2026',
       cropName: _selectedCrop!,
       variety: _varietyController.text.trim(),
       sownDate: _sownDate,
       expectedHarvestDate: _expectedHarvest,
-      status: CropStatus.active,
+      status: isEditing ? widget.existingCrop!.status : CropStatus.active,
       isIntercrop: _isIntercrop,
       areaCovered: area,
-      healthStatus: 'good',
-      activityCount: 0,
+      healthStatus: isEditing ? widget.existingCrop!.healthStatus : 'good',
+      activityCount: isEditing ? widget.existingCrop!.activityCount : 0,
     );
 
     try {
-      // Save to MongoDB backend
-      await ApiService().addCrop(newCrop.toMap()..['id'] = newCrop.id);
-      
-      // Update field active crops count locally
-      final fieldIndex = MockData.fields.indexWhere((f) => f.id == widget.fieldId);
-      if (fieldIndex != -1) {
-        final f = MockData.fields[fieldIndex];
-        MockData.fields[fieldIndex] = f.copyWith(activeCrops: f.activeCrops + 1);
+      if (isEditing) {
+        await ApiService().updateCrop(crop.id, crop.toMap());
+
+        final index = MockData.crops.indexWhere((c) => c.id == crop.id);
+        if (index != -1) {
+          MockData.crops[index] = crop;
+        }
+      } else {
+        // Save to MongoDB backend
+        await ApiService().addCrop(crop.toMap()..['id'] = crop.id);
+
+        // Update field active crops count locally
+        final fieldIndex = MockData.fields.indexWhere((f) => f.id == widget.fieldId);
+        if (fieldIndex != -1) {
+          final f = MockData.fields[fieldIndex];
+          MockData.fields[fieldIndex] = f.copyWith(activeCrops: f.activeCrops + 1);
+        }
+
+        // Append locally so UI updates instantly
+        MockData.crops.add(crop);
       }
-      
-      // Append locally so UI updates instantly
-      MockData.crops.add(newCrop);
 
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Crop added successfully! 🌱'),
+          SnackBar(
+            content: Text(isEditing
+                ? 'Crop updated successfully! 🌱'
+                : 'Crop added successfully! 🌱'),
             backgroundColor: AppColors.primary,
           ),
         );
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {

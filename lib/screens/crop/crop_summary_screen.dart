@@ -8,6 +8,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/action_point_tile.dart';
 import '../../widgets/activity_timeline_tile.dart';
 import '../../widgets/summary_card.dart';
+import '../field/add_crop_screen.dart';
 import 'add_activity_screen.dart';
 
 /// Crop Summary screen — detailed view of a single crop.
@@ -23,6 +24,17 @@ class CropSummaryScreen extends StatefulWidget {
 
 class _CropSummaryScreenState extends State<CropSummaryScreen> {
   String get cropId => widget.cropId;
+
+  Future<void> _editCrop() async {
+    final crop = MockData.crops.firstWhere((c) => c.id == cropId);
+    final updated = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddCropScreen(fieldId: crop.fieldId, existingCrop: crop),
+      ),
+    );
+    if (updated == true && mounted) setState(() {});
+  }
 
   Future<void> _editActivity(ActivityModel activity) async {
     final updated = await Navigator.push<bool>(
@@ -116,6 +128,13 @@ class _CropSummaryScreenState extends State<CropSummaryScreen> {
               icon: const Icon(Icons.arrow_back, color: Colors.white),
               onPressed: () => Navigator.pop(context),
             ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, color: Colors.white),
+                tooltip: 'Edit crop',
+                onPressed: _editCrop,
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: const BoxDecoration(

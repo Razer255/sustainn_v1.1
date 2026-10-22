@@ -700,6 +700,33 @@ app.post('/api/crops', async (req, res) => {
   }
 });
 
+// Update Crop
+app.put('/api/crops/:cropId', async (req, res) => {
+  try {
+    const { season, cropName, variety, sownDate, expectedHarvestDate, status, isIntercrop, areaCovered } = req.body;
+    console.log(`[PUT] /api/crops/${req.params.cropId}`);
+
+    const crop = await Crop.findById(req.params.cropId);
+    if (!crop) {
+      return res.status(404).json({ error: 'Crop not found' });
+    }
+
+    if (season !== undefined) crop.season = season;
+    if (cropName !== undefined) crop.cropName = cropName;
+    if (variety !== undefined) crop.variety = variety;
+    if (sownDate !== undefined) crop.sownDate = sownDate;
+    if (expectedHarvestDate !== undefined) crop.expectedHarvestDate = expectedHarvestDate;
+    if (status !== undefined) crop.status = status;
+    if (isIntercrop !== undefined) crop.isIntercrop = isIntercrop;
+    if (areaCovered !== undefined) crop.areaCovered = areaCovered;
+    await crop.save();
+
+    res.json({ id: crop._id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Get Activities
 app.get('/api/activities', async (req, res) => {
   try {
